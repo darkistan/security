@@ -47,6 +47,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
+                                    {% if current_user.is_admin %}
                                     <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editModal{{ obj.id }}">
                                         <i class="bi bi-pencil"></i> Редагувати
                                     </button>
@@ -56,6 +57,9 @@
                                             <i class="bi bi-trash"></i> Видалити
                                         </button>
                                     </form>
+                                    {% else %}
+                                    <span class="text-muted">—</span>
+                                    {% endif %}
                                 </td>
                             </tr>
                             

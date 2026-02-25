@@ -75,6 +75,16 @@ class AuthManager:
             logger.log_error(f"Помилка перевірки ролі користувача {user_id}: {e}")
             return False
     
+    def is_controller(self, user_id: int) -> bool:
+        """Перевірка чи користувач є контролером."""
+        try:
+            with get_session() as session:
+                user = session.query(User).filter(User.user_id == user_id).first()
+                return user.role == 'controller' if user else False
+        except Exception as e:
+            logger.log_error(f"Помилка перевірки ролі користувача {user_id}: {e}")
+            return False
+    
     def get_user_role(self, user_id: int) -> Optional[str]:
         """
         Отримання ролі користувача

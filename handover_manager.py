@@ -67,10 +67,13 @@ class HandoverManager:
                 logger.log_error(f"Приймач {handover_to_id} не активний")
                 return None
             
-            # Перевіряємо чи приймач не є адміністратором
+            # Перевіряємо чи приймач не є адміністратором або контролером
             handover_to_guard = guard_manager.get_guard(handover_to_id)
             if handover_to_guard and handover_to_guard.get('role') == 'admin':
                 logger.log_error(f"Неможливо передати зміну адміністратору {handover_to_id}")
+                return None
+            if handover_to_guard and handover_to_guard.get('role') == 'controller':
+                logger.log_error(f"Неможливо передати зміну контролеру {handover_to_id}")
                 return None
             
             # Перевіряємо чи здавач і приймач на одному об'єкті
@@ -477,38 +480,39 @@ class HandoverManager:
         handover_by_id: Optional[int] = None,
         handover_to_id: Optional[int] = None,
         status: Optional[str] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        offset: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Отримання списку передач з фільтрами
-        
+
         Args:
             handover_by_id: ID здавача для фільтрації
             handover_to_id: ID приймача для фільтрації
             status: Статус для фільтрації
             limit: Максимальна кількість записів
-            
-        Returns:
-            Список передач
+            offset: Зміщення для пагінації
         """
         try:
             with get_session() as session:
                 query = session.query(ShiftHandover)
-                
+
                 if handover_by_id:
                     query = query.filter(ShiftHandover.handover_by_id == handover_by_id)
-                
+
                 if handover_to_id:
                     query = query.filter(ShiftHandover.handover_to_id == handover_to_id)
-                
+
                 if status:
                     query = query.filter(ShiftHandover.status == status)
-                
+
                 query = query.order_by(ShiftHandover.handed_over_at.desc())
-                
+
+                if offset:
+                    query = query.offset(offset)
                 if limit:
                     query = query.limit(limit)
-                
+
                 handovers = query.all()
                 
                 return [

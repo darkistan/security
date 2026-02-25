@@ -146,42 +146,43 @@ class EventManager:
         event_type: Optional[str] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        offset: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Отримання списку подій з фільтрами
-        
+
         Args:
             object_id: ID об'єкта для фільтрації
             event_type: Тип події для фільтрації
             start_date: Початкова дата
             end_date: Кінцева дата
             limit: Максимальна кількість записів
-            
-        Returns:
-            Список подій
+            offset: Зміщення для пагінації
         """
         try:
             with get_session() as session:
                 query = session.query(Event)
-                
+
                 if object_id:
                     query = query.filter(Event.object_id == object_id)
-                
+
                 if event_type:
                     query = query.filter(Event.event_type == event_type)
-                
+
                 if start_date:
                     query = query.filter(Event.created_at >= start_date)
-                
+
                 if end_date:
                     query = query.filter(Event.created_at <= end_date)
-                
+
                 query = query.order_by(Event.created_at.desc())
-                
+
+                if offset:
+                    query = query.offset(offset)
                 if limit:
                     query = query.limit(limit)
-                
+
                 events = query.all()
                 
                 return [

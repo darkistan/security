@@ -93,53 +93,60 @@ async def safe_edit_message_text(query, text: str, reply_markup=None, parse_mode
 
 def create_menu_keyboard(user_id: int) -> InlineKeyboardMarkup:
     """
-    Створення головного меню
-    
-    Args:
-        user_id: ID користувача
-    
-    Returns:
-        InlineKeyboardMarkup з кнопками меню
+    Створення головного меню залежно від ролі (guard, senior, controller, admin).
     """
     buttons = []
     
-    if auth_manager.is_user_allowed(user_id):
-        shift_manager = get_shift_manager()
-        active_shift = shift_manager.get_active_shift(user_id)
-        guard_manager = get_guard_manager()
-        object_id = guard_manager.get_guard_object_id(user_id) if guard_manager else None
-        active_on_object = shift_manager.get_active_shift_for_object(object_id) if object_id else None
-        object_manager = get_object_manager()
-        obj = object_manager.get_object(object_id) if object_id else None
-        protection_type = (obj or {}).get('protection_type', 'SHIFT')
-        is_temporary_single = protection_type == 'TEMPORARY_SINGLE'
-
-        handover_manager = get_handover_manager()
-        all_sent = handover_manager.get_all_handovers_by_sender(user_id, include_accepted=True)
-        pending_sent = [h for h in all_sent if h['status'] == 'PENDING']
-        pending_to_me = handover_manager.get_pending_handovers(user_id)
-
-        if not active_shift and not active_on_object and not pending_sent and not pending_to_me:
-            buttons.append([InlineKeyboardButton("🟢 Заступив на зміну", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "start_shift"))])
-
-        buttons.append([InlineKeyboardButton("📝 Журнал подій", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "add_event"))])
-
-        if is_temporary_single:
-            if active_shift:
-                buttons.append([InlineKeyboardButton("🔴 Завершити зміну", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "end_shift"))])
-        else:
-            if active_shift:
-                buttons.append([InlineKeyboardButton("🔄 Передати зміну", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "handover_shift"))])
-            if not active_shift and not pending_sent:
-                buttons.append([InlineKeyboardButton("✅ Прийняти зміну", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "accept_handover"))])
-            if pending_sent:
-                buttons.append([InlineKeyboardButton("❌ Відмінити передачу", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "cancel_my_handover"))])
-
-        buttons.append([InlineKeyboardButton("📋 Мої зміни", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "my_shifts"))])
-        buttons.append([InlineKeyboardButton("🏠 Головне меню", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "main_menu"))])
-    else:
-        # Неавторизований користувач
+    if not auth_manager.is_user_allowed(user_id):
         buttons.append([InlineKeyboardButton("🔐 Запросити доступ", callback_data="request_access")])
+        return InlineKeyboardMarkup(buttons)
+    
+    guard_manager = get_guard_manager()
+    guard = guard_manager.get_guard(user_id)
+    role = (guard or {}).get('role', 'guard')
+    
+    # Контролер: тільки «Хто зараз на зміні» та «Головне меню»
+    if role == 'controller':
+        buttons.append([InlineKeyboardButton("👥 Хто зараз на зміні", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "who_on_shift"))])
+        buttons.append([InlineKeyboardButton("🏠 Головне меню", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "main_menu"))])
+        return InlineKeyboardMarkup(buttons)
+    
+    # guard, senior, admin — меню охоронця (для senior та admin додаємо «Хто зараз на зміні»)
+    shift_manager = get_shift_manager()
+    active_shift = shift_manager.get_active_shift(user_id)
+    object_id = guard_manager.get_guard_object_id(user_id) if guard_manager else None
+    active_on_object = shift_manager.get_active_shift_for_object(object_id) if object_id else None
+    object_manager = get_object_manager()
+    obj = object_manager.get_object(object_id) if object_id else None
+    protection_type = (obj or {}).get('protection_type', 'SHIFT')
+    is_temporary_single = protection_type == 'TEMPORARY_SINGLE'
+
+    handover_manager = get_handover_manager()
+    all_sent = handover_manager.get_all_handovers_by_sender(user_id, include_accepted=True)
+    pending_sent = [h for h in all_sent if h['status'] == 'PENDING']
+    pending_to_me = handover_manager.get_pending_handovers(user_id)
+
+    if not active_shift and not active_on_object and not pending_sent and not pending_to_me:
+        buttons.append([InlineKeyboardButton("🟢 Заступив на зміну", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "start_shift"))])
+
+    buttons.append([InlineKeyboardButton("📝 Журнал подій", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "add_event"))])
+
+    if is_temporary_single:
+        if active_shift:
+            buttons.append([InlineKeyboardButton("🔴 Завершити зміну", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "end_shift"))])
+    else:
+        if active_shift:
+            buttons.append([InlineKeyboardButton("🔄 Передати зміну", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "handover_shift"))])
+        if not active_shift and not pending_sent:
+            buttons.append([InlineKeyboardButton("✅ Прийняти зміну", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "accept_handover"))])
+        if pending_sent:
+            buttons.append([InlineKeyboardButton("❌ Відмінити передачу", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "cancel_my_handover"))])
+
+    buttons.append([InlineKeyboardButton("📋 Мої зміни", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "my_shifts"))])
+    # Старший та адмін — кнопка «Хто зараз на зміні»
+    if role in ('senior', 'admin'):
+        buttons.append([InlineKeyboardButton("👥 Хто зараз на зміні", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "who_on_shift"))])
+    buttons.append([InlineKeyboardButton("🏠 Головне меню", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "main_menu"))])
     
     return InlineKeyboardMarkup(buttons)
 
@@ -148,6 +155,27 @@ def get_shift_status_line(user_id: int) -> str:
     """Короткий рядок статусу зміни та балів для відображення у всіх меню (порожній для неавторизованих)."""
     if not auth_manager.is_user_allowed(user_id):
         return ""
+    guard_manager = get_guard_manager()
+    guard = guard_manager.get_guard(user_id)
+    role = (guard or {}).get('role', 'guard')
+
+    # Контролер: шапка без зміни — бали, система, об'єкт, роль
+    if role == 'controller' and guard:
+        object_manager = get_object_manager()
+        obj = object_manager.get_object(guard['object_id'])
+        obj_name = obj['name'] if obj else f"Об'єкт #{guard['object_id']}"
+        balance = get_points_manager().get_balance(user_id)
+        if balance > 0:
+            bal_str = f"🟢 +{balance}"
+        elif balance < 0:
+            bal_str = f"🔴 {balance}"
+        else:
+            bal_str = "0"
+        return (
+            f"📊 Бали: {bal_str}\n"
+            f"👮 <b>Система ведення змін охоронців</b>  🏢 <b>Об'єкт:</b> {obj_name}  <b>Контролер:</b>\n\n"
+        )
+
     shift_manager = get_shift_manager()
     active_shift = shift_manager.get_active_shift(user_id)
     lines = []
@@ -174,44 +202,44 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     keyboard = create_menu_keyboard(user_id)
     
     if auth_manager.is_user_allowed(user_id):
-        # Отримуємо інформацію про користувача
         guard_manager = get_guard_manager()
         guard = guard_manager.get_guard(user_id)
-        
-        if guard:
+
+        if guard and (guard.get('role') == 'controller'):
+            # Контролер: шапка вже в get_shift_status_line, тут лише підпис та дія
+            message_text = f"👤 <b>Контролер:</b> {guard['full_name']}\n\nОберіть дію:"
+            message_text = get_shift_status_line(user_id) + message_text
+        elif guard:
             object_manager = get_object_manager()
             obj = object_manager.get_object(guard['object_id'])
             obj_name = obj['name'] if obj else f"Об'єкт #{guard['object_id']}"
-            
+
             message_text = (
                 f"👮 <b>Система ведення змін охоронців</b>\n\n"
                 f"👤 <b>Охоронець:</b> {guard['full_name']}\n"
                 f"🏢 <b>Об'єкт:</b> {obj_name}\n\n"
             )
+            shift_manager = get_shift_manager()
+            active_shift = shift_manager.get_active_shift(user_id)
+
+            if active_shift:
+                start_time = datetime.fromisoformat(active_shift['start_time']).strftime('%d.%m.%Y %H:%M')
+                duration = datetime.now() - datetime.fromisoformat(active_shift['start_time'])
+                hours = int(duration.total_seconds() // 3600)
+                minutes = int((duration.total_seconds() % 3600) // 60)
+                message_text += (
+                    f"🟢 <b>Активна зміна</b>\n"
+                    f"🆔 ID: #{active_shift['id']}\n"
+                    f"🕐 Початок: {start_time}\n"
+                    f"⏱️ Тривалість: {hours} год. {minutes} хв.\n\n"
+                )
+            else:
+                message_text += "⚪ Активної зміни немає\n\n"
+            message_text += "Оберіть дію:"
+            message_text = get_shift_status_line(user_id) + message_text
         else:
             message_text = "👮 <b>Система ведення змін охоронців</b>\n\n"
-        
-        # Перевіряємо наявність активної зміни
-        shift_manager = get_shift_manager()
-        active_shift = shift_manager.get_active_shift(user_id)
-        
-        if active_shift:
-            start_time = datetime.fromisoformat(active_shift['start_time']).strftime('%d.%m.%Y %H:%M')
-            duration = datetime.now() - datetime.fromisoformat(active_shift['start_time'])
-            hours = int(duration.total_seconds() // 3600)
-            minutes = int((duration.total_seconds() % 3600) // 60)
-            
-            message_text += (
-                f"🟢 <b>Активна зміна</b>\n"
-                f"🆔 ID: #{active_shift['id']}\n"
-                f"🕐 Початок: {start_time}\n"
-                f"⏱️ Тривалість: {hours} год. {minutes} хв.\n\n"
-            )
-        else:
-            message_text += "⚪ Активної зміни немає\n\n"
-        
-        message_text += "Оберіть дію:"
-        message_text = get_shift_status_line(user_id) + message_text
+            message_text = get_shift_status_line(user_id) + message_text + "Оберіть дію:"
     else:
         message_text = (
             "🔐 <b>Доступ до системи</b>\n\n"
@@ -412,7 +440,7 @@ async def event_type_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     message_text = (
         f"📝 <b>Додавання події</b>\n\n"
         f"Тип: {event_types_ua.get(event_type, event_type)}\n\n"
-        f"Введіть опис (нештатна ситуація або поломка):"
+        f"Додайте текст опису події (нештатна ситуація або поломка):"
     )
     await safe_edit_message_text(query, get_shift_status_line(user_id) + message_text)
 
@@ -421,16 +449,42 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Обробка текстових повідомлень (опис події або зауваження)"""
     user_id = update.message.from_user.id
     text = update.message.text
-    
+
     # Перевіряємо чи це опис події
     if user_id in event_creation_state:
         await handle_event_description(update, context)
         return
-    
+
     # Перевіряємо чи це зауваження для передачі
     if user_id in handover_state:
         await handle_handover_notes(update, context)
         return
+
+    # Текст надіслано не в контексті очікуваного вводу — відповідь із підказкою та контактами
+    message_text = (
+        "⚠️ <b>Це повідомлення не буде доставлено та оброблено.</b>\n\n"
+        "Будь ласка, користуйтесь лише кнопками бота нижче. "
+        "Щоб відкрити головне меню — натисніть /start.\n\n"
+    )
+    with get_session() as session:
+        contacts = (
+            session.query(User)
+            .filter(User.role.in_(['senior', 'controller']), User.is_active == True)
+            .order_by(User.role.desc(), User.full_name)
+            .all()
+        )
+        if contacts:
+            message_text += "📞 <b>Для прямого зв'язку використовуйте контакти старшого та контролера:</b>\n"
+            role_ua = {'senior': 'Старший', 'controller': 'Контролер'}
+            for u in contacts:
+                name = (u.full_name or '').strip() or '—'
+                phone = (u.phone or '').strip() or '—'
+                message_text += f"• {role_ua.get(u.role, u.role)}: {name} — {phone}\n"
+        else:
+            message_text += "📞 <b>Для прямого зв'язку</b> — контакти старшого та контролера не налаштовані.\n"
+
+    keyboard = create_menu_keyboard(user_id)
+    await update.message.reply_text(message_text, reply_markup=keyboard, parse_mode='HTML')
 
 
 async def handle_event_description(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -451,6 +505,7 @@ async def handle_event_description(update: Update, context: ContextTypes.DEFAULT
     event_id = event_manager.create_event(shift_id, event_type, description, user_id)
     
     if event_id:
+        await notify_event_to_seniors_and_controllers(context, event_id)
         event_types_ua = {
             'INCIDENT': 'Інцидент',
             'POWER_OFF': 'Вимкнення світла',
@@ -497,8 +552,8 @@ async def handover_shift_callback(update: Update, context: ContextTypes.DEFAULT_
     object_id = guard_manager.get_guard_object_id(user_id)
     guards = guard_manager.get_active_guards(object_id)
     
-    # Виключаємо себе та адміністраторів зі списку
-    guards = [g for g in guards if g['user_id'] != user_id and g['role'] != 'admin']
+    # Виключаємо себе, адміністраторів та контролерів зі списку
+    guards = [g for g in guards if g['user_id'] != user_id and g['role'] != 'admin' and g['role'] != 'controller']
     
     if not guards:
         await query.edit_message_text("❌ Немає доступних приймачів на вашому об'єкті.")
@@ -924,25 +979,74 @@ async def cancel_handover_confirm_callback(update: Update, context: ContextTypes
 
 
 async def send_report_to_admins(context: ContextTypes.DEFAULT_TYPE, report_id: int) -> None:
-    """Відправка звіту адміністраторам"""
+    """Відправка звіту адміністраторам, старшим та контролерам."""
     try:
         report_manager = get_report_manager()
         report_text = report_manager.format_report_for_telegram(report_id)
         
         with get_session() as session:
-            admins = session.query(User).filter(User.role == 'admin').all()
+            recipients = session.query(User).filter(
+                User.role.in_(['admin', 'senior', 'controller']),
+                User.is_active == True
+            ).all()
             
-            for admin in admins:
+            for u in recipients:
                 try:
                     await context.bot.send_message(
-                        chat_id=admin.user_id,
+                        chat_id=u.user_id,
                         text=report_text,
                         parse_mode='HTML'
                     )
                 except Exception as e:
-                    logger.log_error(f"Помилка відправки звіту адміну {admin.user_id}: {e}")
+                    logger.log_error(f"Помилка відправки звіту користувачу {u.user_id}: {e}")
     except Exception as e:
-        logger.log_error(f"Помилка відправки звітів адміністраторам: {e}")
+        logger.log_error(f"Помилка відправки звітів: {e}")
+
+
+async def notify_event_to_seniors_and_controllers(context: ContextTypes.DEFAULT_TYPE, event_id: int) -> None:
+    """Надіслати сповіщення про нову подію старшим та контролерам."""
+    try:
+        event_manager = get_event_manager()
+        event = event_manager.get_event(event_id)
+        if not event:
+            return
+        shift_manager = get_shift_manager()
+        shift = shift_manager.get_shift(event['shift_id'])
+        if not shift:
+            return
+        object_manager = get_object_manager()
+        obj = object_manager.get_object(event['object_id'])
+        object_name = obj['name'] if obj else f"Об'єкт #{event['object_id']}"
+        guard_manager = get_guard_manager()
+        guard = guard_manager.get_guard(shift['guard_id'])
+        guard_name = guard['full_name'] if guard else f"ID:{shift['guard_id']}"
+        event_types_ua = {'INCIDENT': 'Інцидент', 'POWER_OFF': 'Вимкнення світла', 'POWER_ON': 'Відновлення світла'}
+        type_ua = event_types_ua.get(event['event_type'], event['event_type'])
+        time_str = datetime.fromisoformat(event['created_at']).strftime('%d.%m.%Y %H:%M')
+        desc = (event.get('description') or '').strip()
+        text = (
+            f"📝 <b>Нова подія</b>\n\n"
+            f"📋 Тип: {type_ua}\n"
+            f"🏢 Об'єкт: {object_name}\n"
+            f"👤 Охоронець: {guard_name}\n"
+            f"🕐 Час: {time_str}\n"
+        )
+        if desc:
+            text += f"\n📄 <b>Опис:</b>\n{desc}"
+        else:
+            text += "\n📄 <b>Опис:</b> —"
+        with get_session() as session:
+            recipients = session.query(User).filter(
+                User.role.in_(['senior', 'controller']),
+                User.is_active == True
+            ).all()
+            for u in recipients:
+                try:
+                    await context.bot.send_message(chat_id=u.user_id, text=text, parse_mode='HTML')
+                except Exception as e:
+                    logger.log_error(f"Помилка відправки сповіщення про подію користувачу {u.user_id}: {e}")
+    except Exception as e:
+        logger.log_error(f"Помилка сповіщення старших/контролерів про подію: {e}")
 
 
 async def my_shifts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 0) -> None:
@@ -1058,6 +1162,8 @@ async def event_confirm_callback(update: Update, context: ContextTypes.DEFAULT_T
     event_manager = get_event_manager()
     event_id = event_manager.create_event(shift_id, event_type, desc, user_id)
     del event_creation_state[user_id]
+    if event_id:
+        await notify_event_to_seniors_and_controllers(context, event_id)
     event_types_ua = {"POWER_OFF": "Вимкнення світла", "POWER_ON": "Відновлення світла"}
     if event_id:
         msg = (
@@ -1106,6 +1212,42 @@ async def cancel_accept_callback(update: Update, context: ContextTypes.DEFAULT_T
     
     keyboard = create_menu_keyboard(user_id)
     await safe_edit_message_text(query, get_shift_status_line(user_id) + "❌ Прийняття зміни скасовано.", reply_markup=keyboard)
+
+
+async def who_on_shift_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Екран «Хто зараз на зміні» — список активних змін по об'єктах."""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    shift_manager = get_shift_manager()
+    active_list = shift_manager.get_all_active_shifts()
+    
+    if not active_list:
+        message_text = "👥 <b>Хто зараз на зміні</b>\n\nЗараз ніхто не на зміні."
+    else:
+        from collections import OrderedDict
+        by_object = OrderedDict()
+        for s in active_list:
+            oname = s['object_name']
+            if oname not in by_object:
+                by_object[oname] = []
+            t = datetime.fromisoformat(s['start_time']).strftime('%H:%M')
+            line = f"  • {s['guard_name']} (з {t})"
+            if s.get('guard_phone'):
+                line += f" — {s['guard_phone']}"
+            by_object[oname].append(line)
+        lines = ["👥 <b>Хто зараз на зміні</b>\n"]
+        for obj_name, guards in by_object.items():
+            lines.append(f"<b>🏢 {obj_name}</b>")
+            lines.extend(guards)
+            lines.append("")
+        message_text = "\n".join(lines).strip()
+    
+    buttons = [[InlineKeyboardButton("🔄 Оновити", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "who_on_shift"))]]
+    buttons.append([InlineKeyboardButton("🏠 Головне меню", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "main_menu"))])
+    keyboard = InlineKeyboardMarkup(buttons)
+    await safe_edit_message_text(query, get_shift_status_line(user_id) + message_text, reply_markup=keyboard)
 
 
 async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1178,6 +1320,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await accept_handover_callback(update, context)
     elif callback_data == "my_shifts":
         await my_shifts_callback(update, context)
+    elif callback_data == "who_on_shift":
+        await who_on_shift_callback(update, context)
     elif callback_data == "main_menu":
         await main_menu_callback(update, context)
     elif callback_data.startswith("event_type:"):

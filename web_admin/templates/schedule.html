@@ -65,6 +65,7 @@
                                 {% set slot_key = (guard.user_id, day) %}
                                 {% set has_slot = slot_key in slots_set %}
                                 <td class="text-center p-0 {% if has_slot %}table-secondary{% endif %}" style="min-width: 2rem;">
+                                    {% if current_user.is_admin %}
                                     <form method="POST" action="{{ url_for('schedule_toggle') }}" class="m-0 d-block">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                         <input type="hidden" name="guard_id" value="{{ guard.user_id }}"/>
@@ -74,6 +75,9 @@
                                         {% if selected_object_id %}<input type="hidden" name="object_id" value="{{ selected_object_id }}"/>{% endif %}
                                         <button type="submit" class="btn btn-sm w-100 border-0 {% if has_slot %}bg-secondary text-dark{% else %}bg-transparent{% endif %}" style="min-height: 2rem;" title="Клік — {{ 'прибрати зміну' if has_slot else 'додати зміну' }}">&nbsp;</button>
                                     </form>
+                                    {% else %}
+                                    <span class="d-block" style="min-height: 2rem;">{% if has_slot %}●{% endif %}</span>
+                                    {% endif %}
                                 </td>
                                 {% endfor %}
                             </tr>

@@ -113,10 +113,13 @@ class ScheduleManager:
     def get_guards_for_schedule(
         self, object_id: Optional[int] = None, exclude_admin: bool = False
     ) -> List[Dict[str, Any]]:
-        """Список охоронців для сітки (всі або по object_id), відсортовані по ПІБ. exclude_admin — не включати користувачів з роллю admin."""
+        """Список охоронців для сітки (всі або по object_id). Контролери не включаються. exclude_admin — не включати admin."""
         try:
             with get_session() as session:
-                query = session.query(User).filter(User.is_active == True)
+                query = session.query(User).filter(
+                    User.is_active == True,
+                    User.role.in_(['guard', 'senior', 'admin']),
+                )
                 if object_id is not None:
                     query = query.filter(User.object_id == object_id)
                 if exclude_admin:

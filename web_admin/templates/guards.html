@@ -10,7 +10,7 @@
 </div>
 
 <!-- Запити на доступ -->
-{% if pending_requests %}
+{% if pending_requests and current_user.is_admin %}
 <div class="row mb-4">
     <div class="col-12">
         <div class="card border-warning">
@@ -80,6 +80,7 @@
                                                     <select name="role" class="form-select">
                                                         <option value="guard">Охоронець</option>
                                                         <option value="senior">Старший</option>
+                                                        <option value="controller">Контролер</option>
                                                         <option value="admin">Адміністратор</option>
                                                     </select>
                                                 </div>
@@ -103,6 +104,7 @@
 {% endif %}
 
 <!-- Додати веб-користувача -->
+{% if current_user.is_admin %}
 <div class="row mb-3">
     <div class="col-12">
         <div class="card border-primary">
@@ -144,6 +146,7 @@
                             <select name="role" class="form-select">
                                 <option value="guard">Охоронець</option>
                                 <option value="senior">Старший</option>
+                                <option value="controller">Контролер</option>
                                 <option value="admin">Адмін</option>
                             </select>
                         </div>
@@ -160,8 +163,10 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- Додати охоронця (Telegram) -->
+{% if current_user.is_admin %}
 <div class="row mb-3">
     <div class="col-12">
         <div class="card border-info">
@@ -209,6 +214,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- Список охоронців -->
 <div class="row">
@@ -339,6 +345,8 @@
                                     <span class="badge bg-danger">Адмін</span>
                                     {% elif guard.role == 'senior' %}
                                     <span class="badge bg-warning">Старший</span>
+                                    {% elif guard.role == 'controller' %}
+                                    <span class="badge bg-secondary">Контролер</span>
                                     {% else %}
                                     <span class="badge bg-info">Охоронець</span>
                                     {% endif %}
@@ -359,13 +367,16 @@
                                     {% endif %}
                                 </td>
                                 <td>
+                                    {% if current_user.is_admin %}
                                     <div class="btn-group" role="group">
                                         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#fullNameModal{{ guard.user_id }}">
                                             <i class="bi bi-person"></i> ПІБ
                                         </button>
+                                        {% if guard.role in ['admin', 'senior'] %}
                                         <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#passwordModal{{ guard.user_id }}">
                                             <i class="bi bi-key"></i> Пароль
                                         </button>
+                                        {% endif %}
                                         <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editModal{{ guard.user_id }}">
                                             <i class="bi bi-pencil"></i> Редагувати
                                         </button>
@@ -400,6 +411,9 @@
                                         </button>
                                         {% endif %}
                                     </div>
+                                    {% else %}
+                                    <span class="text-muted">—</span>
+                                    {% endif %}
                                 </td>
                             </tr>
                             
@@ -494,6 +508,7 @@
                                                     <select name="role" class="form-select">
                                                         <option value="guard" {% if guard.role == 'guard' %}selected{% endif %}>Охоронець</option>
                                                         <option value="senior" {% if guard.role == 'senior' %}selected{% endif %}>Старший</option>
+                                                        <option value="controller" {% if guard.role == 'controller' %}selected{% endif %}>Контролер</option>
                                                         <option value="admin" {% if guard.role == 'admin' %}selected{% endif %}>Адміністратор</option>
                                                     </select>
                                                     {% endif %}

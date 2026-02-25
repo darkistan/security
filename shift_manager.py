@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 
 from database import get_session
-from models import Shift, User, Event
+from models import Shift, User, Event, SecurityObject
 from logger import logger
 from guard_manager import get_guard_manager
 
@@ -191,6 +191,37 @@ class ShiftManager:
             logger.log_error(f"Помилка отримання активної зміни на об'єкті: {e}")
             return None
     
+    def get_all_active_shifts(self) -> List[Dict[str, Any]]:
+        """
+        Отримання всіх активних змін у системі з ПІБ охоронця та назвою об'єкта.
+        Для екрану «Хто зараз на зміні» та сповіщень.
+        """
+        try:
+            with get_session() as session:
+                rows = (
+                    session.query(Shift, User.full_name, User.phone, SecurityObject.name)
+                    .join(User, Shift.guard_id == User.user_id)
+                    .join(SecurityObject, Shift.object_id == SecurityObject.id)
+                    .filter(Shift.status == 'ACTIVE')
+                    .order_by(SecurityObject.name, Shift.start_time)
+                    .all()
+                )
+                return [
+                    {
+                        'shift_id': shift.id,
+                        'guard_id': shift.guard_id,
+                        'guard_name': guard_name or f"ID:{shift.guard_id}",
+                        'guard_phone': guard_phone,
+                        'object_id': shift.object_id,
+                        'object_name': object_name or f"Об'єкт #{shift.object_id}",
+                        'start_time': shift.start_time.isoformat(),
+                    }
+                    for shift, guard_name, guard_phone, object_name in rows
+                ]
+        except Exception as e:
+            logger.log_error(f"Помилка отримання списку активних змін: {e}")
+            return []
+    
     def get_shift(self, shift_id: int) -> Optional[Dict[str, Any]]:
         """
         Отримання інформації про зміну
@@ -226,7 +257,9 @@ class ShiftManager:
         object_id: Optional[int] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-        limit: Optional[int] = None
+        status: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Отримання списку змін з фільтрами
@@ -250,7 +283,10 @@ class ShiftManager:
                 
                 if object_id:
                     query = query.filter(Shift.object_id == object_id)
-                
+
+                if status:
+                    query = query.filter(Shift.status == status)
+
                 if start_date:
                     query = query.filter(Shift.start_time >= start_date)
                 
@@ -258,10 +294,12 @@ class ShiftManager:
                     query = query.filter(Shift.start_time <= end_date)
                 
                 query = query.order_by(Shift.start_time.desc())
-                
+
+                if offset:
+                    query = query.offset(offset)
                 if limit:
                     query = query.limit(limit)
-                
+
                 shifts = query.all()
                 
                 return [

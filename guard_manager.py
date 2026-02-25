@@ -2,7 +2,7 @@
 Модуль для управління охоронцями
 """
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 
 from database import get_session
 from models import User, SecurityObject
@@ -93,37 +93,30 @@ class GuardManager:
         phone: Optional[str] = None,
         object_id: Optional[int] = None,
         role: Optional[str] = None
-    ) -> bool:
+    ) -> Tuple[bool, Optional[str]]:
         """
-        Оновлення даних охоронця
-        
-        Args:
-            user_id: Telegram ID користувача
-            full_name: Нове ПІБ (опціонально)
-            phone: Новий телефон (опціонально)
-            object_id: Новий об'єкт (опціонально)
-            role: Нова роль (опціонально)
-            
+        Оновлення даних охоронця.
+
         Returns:
-            True якщо оновлено успішно
+            (True, None) при успіху; (False, повідомлення_помилки) при помилці.
         """
         try:
             with get_session() as session:
                 guard = session.query(User).filter(User.user_id == user_id).first()
                 if not guard:
                     logger.log_error(f"Охоронець {user_id} не знайдено")
-                    return False
+                    return (False, "Охоронця не знайдено")
                 
                 if full_name:
                     name_validation = input_validator.validate_full_name(full_name)
                     if not name_validation['valid']:
-                        return False
+                        return (False, name_validation.get('message', 'Невірне ПІБ'))
                     guard.full_name = name_validation['cleaned_full_name']
                 
                 if phone:
                     phone_validation = input_validator.validate_phone(phone)
                     if not phone_validation['valid']:
-                        return False
+                        return (False, phone_validation.get('message', 'Невірний номер телефону'))
                     guard.phone = phone_validation['cleaned_phone']
                 
                 if object_id:
@@ -133,17 +126,18 @@ class GuardManager:
                     ).first()
                     if not obj:
                         logger.log_error(f"Об'єкт {object_id} не знайдено")
-                        return False
+                        return (False, f"Об'єкт не знайдено або неактивний.")
                     guard.object_id = object_id
                 
                 if role:
-                    if not input_validator.validate_role(role):
+                    role_valid = input_validator.validate_role(role)
+                    if not role_valid:
                         logger.log_error(f"Невірна роль: {role}")
-                        return False
+                        return (False, "Невірна роль.")
                     # Якщо користувач є адміністратором, не дозволяємо змінювати роль
                     if guard.role == 'admin' and role.lower() != 'admin':
                         logger.log_warning(f"Спроба змінити роль адміністратора {user_id} заблокована")
-                        return False
+                        return (False, "Роль адміністратора не можна змінити.")
                     guard.role = role.lower()
                     # Якщо роль змінена на admin, автоматично активуємо
                     if role.lower() == 'admin':
@@ -151,10 +145,10 @@ class GuardManager:
                 
                 session.commit()
                 logger.log_info(f"Оновлено охоронця {user_id}")
-                return True
+                return (True, None)
         except Exception as e:
             logger.log_error(f"Помилка оновлення охоронця: {e}")
-            return False
+            return (False, "Помилка збереження. Спробуйте пізніше.")
     
     def activate_guard(self, user_id: int) -> bool:
         """

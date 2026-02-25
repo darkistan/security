@@ -31,7 +31,7 @@ class User(Base):
     username = Column(String(100))
     approved_at = Column(DateTime, default=datetime.now)
     notifications_enabled = Column(Boolean, default=False)
-    role = Column(String(20), default='guard', index=True)  # guard, senior, admin
+    role = Column(String(20), default='guard', index=True)  # guard, senior, controller, admin
     full_name = Column(String(200), nullable=False)  # ПІБ (обов'язкове)
     password_hash = Column(String(255), nullable=True)  # Для веб-доступу
     phone = Column(String(50), nullable=False)  # Телефон (обов'язкове)

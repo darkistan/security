@@ -105,10 +105,13 @@ class VacationManager:
             return None
 
     def get_guards_for_schedule(self, object_id: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Список охоронців для сітки (всі або по object_id), відсортовані по ПІБ."""
+        """Список охоронців для сітки відпусток. Контролери не включаються."""
         try:
             with get_session() as session:
-                query = session.query(User).filter(User.is_active == True)
+                query = session.query(User).filter(
+                    User.is_active == True,
+                    User.role.in_(['guard', 'senior', 'admin']),
+                )
                 if object_id is not None:
                     query = query.filter(User.object_id == object_id)
                 users = query.order_by(User.full_name).all()

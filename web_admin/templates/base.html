@@ -58,7 +58,7 @@
                         </ul>
                     </li>
                     {% endif %}
-                    {% if current_user.is_authenticated and current_user.is_admin %}
+                    {% if current_user.is_authenticated and (current_user.is_admin or current_user.is_senior) %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-tools"></i> Адміністрування

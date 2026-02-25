@@ -169,6 +169,7 @@ class PointsManager:
         self,
         guard_id: Optional[int] = None,
         limit: int = 50,
+        offset: int = 0,
     ) -> List[Dict[str, Any]]:
         """
         Історія операцій з балами.
@@ -186,10 +187,12 @@ class PointsManager:
                     session.query(GuardPoint, User.full_name.label("guard_name"))
                     .join(User, GuardPoint.guard_id == User.user_id)
                     .order_by(GuardPoint.created_at.desc())
-                    .limit(limit)
                 )
                 if guard_id is not None:
                     query = query.filter(GuardPoint.guard_id == guard_id)
+                if offset:
+                    query = query.offset(offset)
+                query = query.limit(limit)
                 rows = query.all()
                 result = []
                 for gp, guard_name in rows:

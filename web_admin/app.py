@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from database import init_database, get_session
-from models import User, SecurityObject, Shift, Event, ShiftHandover, Report, Log, ActiveSession, Announcement
+from models import User, SecurityObject, Shift, Event, ShiftHandover, Report, Log, ActiveSession, Announcement, GuardPoint
 from shift_manager import get_shift_manager
 from event_manager import get_event_manager
 from handover_manager import get_handover_manager
@@ -185,6 +185,18 @@ def admin_required(f):
     return decorated_function
 
 
+def admin_or_senior_required(f):
+    """Декоратор: доступ мають адміністратор та старший (перегляд)."""
+    @wraps(f)
+    @login_required
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_admin and not current_user.is_senior:
+            flash('Доступ заборонено. Потрібні права адміністратора або старшого.', 'danger')
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 def senior_required(f):
     """Декоратор для перевірки прав старшого або адміністратора"""
     @wraps(f)
@@ -245,12 +257,13 @@ def dashboard():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Вхід у систему"""
-    # Отримуємо список користувачів з ПІБ та паролем для відображення в переліку
+    # Отримуємо список користувачів з ПІБ та паролем для відображення в переліку (лише адмін та старший)
     with get_session() as session:
         users_with_passwords = session.query(User).filter(
             User.password_hash.isnot(None),
             User.full_name.isnot(None),
-            User.full_name != ''
+            User.full_name != '',
+            User.role.in_(['admin', 'senior'])
         ).order_by(User.full_name, User.username).all()
         
         users_list = []
@@ -284,6 +297,9 @@ def login():
             
             if user and user.is_active and user.password_hash:
                 if check_password_hash(user.password_hash, password):
+                    if user.role not in ('admin', 'senior'):
+                        flash('Веб-доступ дозволено лише адміністраторам та старшим.', 'warning')
+                        return render_template('login.html', users=users_list)
                     # Створюємо сесію
                     session_id = str(uuid.uuid4())
                     active_session = ActiveSession(
@@ -360,7 +376,7 @@ def ratelimit_handler(e):
 
 
 @app.route('/guards')
-@admin_required
+@admin_or_senior_required
 def guards():
     """Сторінка управління охоронцями"""
     sort_by = request.args.get('sort_by', 'user_id')
@@ -509,12 +525,12 @@ def edit_guard(user_id):
     if role:
         update_data['role'] = role
     
-    success = guard_manager.update_guard(user_id, **update_data)
+    success, error_message = guard_manager.update_guard(user_id, **update_data)
     
     if success:
         flash('Дані охоронця оновлено.', 'success')
     else:
-        flash('Помилка оновлення даних.', 'danger')
+        flash(error_message or 'Помилка оновлення даних.', 'danger')
     
     return redirect(url_for('guards'))
 
@@ -766,7 +782,7 @@ def delete_guard():
 
 
 @app.route('/objects')
-@admin_required
+@admin_or_senior_required
 def objects():
     """Сторінка управління об'єктами"""
     object_manager = get_object_manager()
@@ -887,65 +903,96 @@ def journal():
 @app.route('/shifts')
 @login_required
 def shifts():
-    """Сторінка перегляду змін"""
+    """Сторінка перегляду змін з пагінацією"""
     shift_manager = get_shift_manager()
-    
-    # Фільтри
     guard_id = request.args.get('guard_id', type=int)
     object_id = request.args.get('object_id', type=int)
     status = request.args.get('status', '')
-    
-    # Для звичайних охоронців - тільки свої зміни
+
     if not current_user.is_senior:
         guard_id = current_user.user_id
-    
+
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    if page < 1:
+        page = 1
+    with get_session() as session:
+        count_q = session.query(Shift)
+        if guard_id:
+            count_q = count_q.filter(Shift.guard_id == guard_id)
+        if object_id:
+            count_q = count_q.filter(Shift.object_id == object_id)
+        if status:
+            count_q = count_q.filter(Shift.status == status)
+        total_shifts = count_q.count()
+    total_pages = max(1, (total_shifts + per_page - 1) // per_page)
+    if page > total_pages:
+        page = total_pages
+    offset = (page - 1) * per_page
+
     shifts_list = shift_manager.get_shifts(
         guard_id=guard_id,
         object_id=object_id,
-        limit=100
+        status=status if status else None,
+        limit=per_page,
+        offset=offset
     )
-    
-    # Фільтрація за статусом
-    if status:
-        shifts_list = [s for s in shifts_list if s['status'] == status]
-    
+
     guard_manager = get_guard_manager()
     object_manager = get_object_manager()
-    
     for s in shifts_list:
         guard = guard_manager.get_guard(s['guard_id'])
         s['guard_full_name'] = guard['full_name'] if guard else ('ID: ' + str(s['guard_id']))
         s['guard_phone'] = guard.get('phone', '') if guard else ''
-    
+
     guards_list = guard_manager.get_all_guards() if current_user.is_senior else []
     objects_list = object_manager.get_all_objects(active_only=True)
-    
+
     return render_template('shifts.html',
                          shifts=shifts_list,
                          guards=guards_list,
                          objects=objects_list,
                          selected_guard_id=guard_id,
                          selected_object_id=object_id,
-                         selected_status=status)
+                         selected_status=status,
+                         page=page,
+                         total_pages=total_pages,
+                         total_shifts=total_shifts,
+                         per_page=per_page)
 
 
 @app.route('/points')
-@admin_required
+@admin_or_senior_required
 def points():
-    """Сторінка балів охоронців: таблиця з балансом та історія операцій"""
+    """Сторінка балів охоронців: таблиця з балансом та історія операцій з пагінацією"""
     points_mgr = get_points_manager()
     guard_mgr = get_guard_manager()
     object_mgr = get_object_manager()
     guards_list = guard_mgr.get_all_guards()
     balances = {g['user_id']: points_mgr.get_balance(g['user_id']) for g in guards_list}
-    history = points_mgr.get_history(guard_id=None, limit=50)
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    if page < 1:
+        page = 1
+    with get_session() as session:
+        count_q = session.query(GuardPoint)
+        total_history = count_q.count()
+    total_pages = max(1, (total_history + per_page - 1) // per_page)
+    if page > total_pages:
+        page = total_pages
+    offset = (page - 1) * per_page
+    history = points_mgr.get_history(guard_id=None, limit=per_page, offset=offset)
     objects_list = object_mgr.get_all_objects(active_only=True)
     objects_by_id = {obj['id']: obj['name'] for obj in objects_list}
     return render_template('points.html',
                           guards=guards_list,
                           balances=balances,
                           history=history,
-                          objects_by_id=objects_by_id)
+                          objects_by_id=objects_by_id,
+                          page=page,
+                          total_pages=total_pages,
+                          total_history=total_history,
+                          per_page=per_page)
 
 
 @app.route('/points/add', methods=['POST'])
@@ -1009,12 +1056,22 @@ def points_delete(point_id):
 
 
 @app.route('/announcements')
-@admin_required
+@admin_or_senior_required
 def announcements():
-    """Сторінка оголошень: історія та створення."""
+    """Сторінка оголошень з пагінацією"""
     try:
         announcement_mgr = get_announcement_manager()
-        announcements_list = announcement_mgr.get_announcement_history(limit=50)
+        page = request.args.get('page', 1, type=int)
+        per_page = 20
+        if page < 1:
+            page = 1
+        with get_session() as session:
+            total_announcements = session.query(Announcement).count()
+        total_pages = max(1, (total_announcements + per_page - 1) // per_page)
+        if page > total_pages:
+            page = total_pages
+        offset = (page - 1) * per_page
+        announcements_list = announcement_mgr.get_announcement_history(limit=per_page, offset=offset)
         users_list = announcement_mgr.get_all_users_for_select()
         object_mgr = get_object_manager()
         objects_list = object_mgr.get_all_objects(active_only=True)
@@ -1023,11 +1080,16 @@ def announcements():
             announcements=announcements_list,
             users=users_list,
             objects=objects_list,
+            page=page,
+            total_pages=total_pages,
+            total_announcements=total_announcements,
+            per_page=per_page,
         )
     except Exception as e:
         logger.log_error(f"Помилка завантаження оголошень: {e}")
         flash(f'Помилка завантаження оголошень: {e}', 'danger')
-        return render_template('announcements.html', announcements=[], users=[], objects=[])
+        return render_template('announcements.html', announcements=[], users=[], objects=[],
+                             page=1, total_pages=1, total_announcements=0, per_page=20)
 
 
 @app.route('/announcements/create', methods=['POST'])
@@ -1080,7 +1142,7 @@ def create_announcement():
 
 
 @app.route('/announcements/<int:ann_id>/recipients')
-@admin_required
+@admin_or_senior_required
 def announcement_recipients(ann_id):
     """Перегляд отримувачів оголошення."""
     try:
@@ -1170,7 +1232,7 @@ def schedule_page():
 
 
 @app.route('/schedule/toggle', methods=['POST'])
-@login_required
+@admin_required
 def schedule_toggle():
     """Перемикання слота (додати/прибрати зміну в день). Редирект назад на графік."""
     from datetime import date, datetime as dt
@@ -1272,7 +1334,7 @@ def _build_schedule_pdf(year: int, month: int, object_id, guards, slots_set, day
 
 
 @app.route('/schedule/pdf')
-@login_required
+@admin_or_senior_required
 def schedule_pdf():
     """Експорт графіка змін за місяць у PDF (таблиця охоронці × дні, сірі клітинки — зміни)."""
     from datetime import date
@@ -1289,6 +1351,10 @@ def schedule_pdf():
     month_name = MONTH_NAMES_UA[month] if 1 <= month <= 12 else ''
     schedule_mgr = get_schedule_manager()
     guards = schedule_mgr.get_guards_for_schedule(object_id=object_id, exclude_admin=True)
+    # У печатну форму не потрапляють контролери (додаткова перевірка)
+    with get_session() as session:
+        controller_ids = {u.user_id for u in session.query(User.user_id).filter(User.role == 'controller').all()}
+    guards = [g for g in guards if g['user_id'] not in controller_ids]
     slots_set = schedule_mgr.get_slots_for_month(year, month, object_id=object_id)
     if not guards:
         flash('Немає даних для експорту.', 'warning')
@@ -1340,7 +1406,7 @@ def vacation_schedule_page():
 
 
 @app.route('/vacation_schedule/toggle', methods=['POST'])
-@login_required
+@admin_required
 def vacation_schedule_toggle():
     """Перемикання дня відпустки. Редирект назад на графік відпусток."""
     from datetime import datetime as dt
@@ -1463,19 +1529,34 @@ def delete_shift(shift_id):
 def events():
     """Сторінка перегляду подій"""
     event_manager = get_event_manager()
-    
-    # Фільтри
+
     object_id = request.args.get('object_id', type=int)
     event_type = request.args.get('event_type', '')
-    
-    # Для звичайних охоронців - тільки події зі свого об'єкта
+
     if not current_user.is_senior:
         object_id = current_user.object_id
-    
+
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    if page < 1:
+        page = 1
+    with get_session() as session:
+        count_q = session.query(Event)
+        if object_id:
+            count_q = count_q.filter(Event.object_id == object_id)
+        if event_type:
+            count_q = count_q.filter(Event.event_type == event_type)
+        total_events = count_q.count()
+    total_pages = max(1, (total_events + per_page - 1) // per_page)
+    if page > total_pages:
+        page = total_pages
+    offset = (page - 1) * per_page
+
     events_list = event_manager.get_events(
         object_id=object_id,
         event_type=event_type if event_type else None,
-        limit=100
+        limit=per_page,
+        offset=offset
     )
     
     shift_manager = get_shift_manager()
@@ -1497,26 +1578,48 @@ def events():
                          events=events_list,
                          objects=objects_list,
                          selected_object_id=object_id,
-                         selected_event_type=event_type)
+                         selected_event_type=event_type,
+                         page=page,
+                         total_pages=total_pages,
+                         total_events=total_events,
+                         per_page=per_page)
 
 
 @app.route('/handovers')
 @login_required
 def handovers():
-    """Сторінка перегляду передач"""
+    """Сторінка перегляду передач з пагінацією"""
     handover_manager = get_handover_manager()
-    
-    # Фільтри
     status = request.args.get('status', '')
-    
-    # Для звичайних охоронців - тільки свої передачі
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    if page < 1:
+        page = 1
+
     if current_user.is_senior:
-        handovers_list = handover_manager.get_handovers(status=status if status else None, limit=100)
+        with get_session() as session:
+            count_q = session.query(ShiftHandover)
+            if status:
+                count_q = count_q.filter(ShiftHandover.status == status)
+            total_handovers = count_q.count()
+        total_pages = max(1, (total_handovers + per_page - 1) // per_page)
+        if page > total_pages:
+            page = total_pages
+        offset = (page - 1) * per_page
+        handovers_list = handover_manager.get_handovers(
+            status=status if status else None,
+            limit=per_page,
+            offset=offset
+        )
     else:
         sent = handover_manager.get_handovers(handover_by_id=current_user.user_id, limit=50)
         received = handover_manager.get_handovers(handover_to_id=current_user.user_id, limit=50)
         handovers_list = sent + received
-    
+        handovers_list.sort(key=lambda h: h.get('handed_over_at') or '', reverse=True)
+        total_handovers = len(handovers_list)
+        total_pages = 1
+        per_page = total_handovers
+
     guard_manager = get_guard_manager()
     for h in handovers_list:
         by_guard = guard_manager.get_guard(h['handover_by_id'])
@@ -1525,10 +1628,14 @@ def handovers():
         h['handover_by_phone'] = by_guard.get('phone', '') if by_guard else ''
         h['handover_to_full_name'] = to_guard['full_name'] if to_guard else ('ID: ' + str(h['handover_to_id']))
         h['handover_to_phone'] = to_guard.get('phone', '') if to_guard else ''
-    
+
     return render_template('handovers.html',
                          handovers=handovers_list,
-                         selected_status=status)
+                         selected_status=status,
+                         page=page,
+                         total_pages=total_pages,
+                         total_handovers=total_handovers,
+                         per_page=per_page)
 
 
 @app.route('/handovers/<int:handover_id>')
@@ -1611,13 +1718,25 @@ def delete_handover(handover_id):
 @app.route('/reports')
 @senior_required
 def reports():
-    """Сторінка перегляду звітів"""
+    """Сторінка перегляду звітів з пагінацією"""
     report_manager = get_report_manager()
-    
     object_id = request.args.get('object_id', type=int)
-    
-    reports_list = report_manager.get_reports(object_id=object_id, limit=100)
-    
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    if page < 1:
+        page = 1
+    with get_session() as session:
+        count_q = session.query(Report)
+        if object_id:
+            count_q = count_q.filter(Report.object_id == object_id)
+        total_reports = count_q.count()
+    total_pages = max(1, (total_reports + per_page - 1) // per_page)
+    if page > total_pages:
+        page = total_pages
+    offset = (page - 1) * per_page
+
+    reports_list = report_manager.get_reports(object_id=object_id, limit=per_page, offset=offset)
+
     guard_manager = get_guard_manager()
     for r in reports_list:
         by_guard = guard_manager.get_guard(r['handover_by_id'])
@@ -1626,14 +1745,18 @@ def reports():
         r['handover_by_phone'] = by_guard.get('phone', '') if by_guard else ''
         r['handover_to_full_name'] = to_guard['full_name'] if to_guard else ('ID: ' + str(r['handover_to_id']))
         r['handover_to_phone'] = to_guard.get('phone', '') if to_guard else ''
-    
+
     object_manager = get_object_manager()
     objects_list = object_manager.get_all_objects(active_only=True)
-    
+
     return render_template('reports.html',
                          reports=reports_list,
                          objects=objects_list,
-                         selected_object_id=object_id)
+                         selected_object_id=object_id,
+                         page=page,
+                         total_pages=total_pages,
+                         total_reports=total_reports,
+                         per_page=per_page)
 
 
 @app.route('/reports/<int:report_id>')
@@ -1763,23 +1886,29 @@ def delete_object(object_id):
 
 
 @app.route('/logs')
-@admin_required
+@admin_or_senior_required
 def logs():
-    """Сторінка перегляду логів"""
+    """Сторінка перегляду логів з пагінацією"""
     level = request.args.get('level', '')
     user_id = request.args.get('user_id', type=int)
-    
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    if page < 1:
+        page = 1
+
     with get_session() as session:
         query = session.query(Log)
-        
         if level:
             query = query.filter(Log.level == level.upper())
-        
         if user_id:
             query = query.filter(Log.user_id == user_id)
-        
-        logs_list = query.order_by(Log.timestamp.desc()).limit(500).all()
-        
+        total_logs = query.count()
+        total_pages = max(1, (total_logs + per_page - 1) // per_page)
+        if page > total_pages:
+            page = total_pages
+        offset = (page - 1) * per_page
+        logs_list = query.order_by(Log.timestamp.desc()).offset(offset).limit(per_page).all()
+
         logs_data = [
             {
                 'id': log.id,
@@ -1791,8 +1920,15 @@ def logs():
             }
             for log in logs_list
         ]
-    
-    return render_template('logs.html', logs=logs_data, selected_level=level, selected_user_id=user_id)
+
+    return render_template('logs.html',
+                         logs=logs_data,
+                         selected_level=level,
+                         selected_user_id=user_id,
+                         page=page,
+                         total_pages=total_pages,
+                         total_logs=total_logs,
+                         per_page=per_page)
 
 
 @app.route('/logs/delete', methods=['POST'])

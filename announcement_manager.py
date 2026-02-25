@@ -136,16 +136,17 @@ class AnnouncementManager:
             logger.log_error(f"Помилка відправки оголошення: {e}")
             return {"sent": 0, "failed": len(recipient_user_ids), "announcement_id": None}
 
-    def get_announcement_history(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """Історія відправлених оголошень."""
+    def get_announcement_history(self, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+        """Історія відправлених оголошень з пагінацією."""
         try:
             with get_session() as session:
-                announcements = (
+                query = (
                     session.query(Announcement)
                     .order_by(Announcement.created_at.desc())
-                    .limit(limit)
-                    .all()
                 )
+                if offset:
+                    query = query.offset(offset)
+                announcements = query.limit(limit).all()
                 result = []
                 for ann in announcements:
                     result.append({

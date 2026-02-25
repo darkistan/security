@@ -176,7 +176,8 @@ class ReportManager:
         object_id: Optional[int] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        offset: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Отримання списку звітів з фільтрами
@@ -204,10 +205,12 @@ class ReportManager:
                     query = query.filter(Report.created_at <= end_date)
                 
                 query = query.order_by(Report.created_at.desc())
-                
+
+                if offset:
+                    query = query.offset(offset)
                 if limit:
                     query = query.limit(limit)
-                
+
                 reports = query.all()
                 
                 return [

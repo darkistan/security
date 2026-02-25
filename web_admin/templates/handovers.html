@@ -43,7 +43,7 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-list"></i> Список передач ({{ handovers|length }})</h5>
+                <h5 class="mb-0"><i class="bi bi-list"></i> Список передач ({{ total_handovers }})</h5>
             </div>
             <div class="card-body">
                 {% if handovers %}
@@ -93,6 +93,32 @@
                         </tbody>
                     </table>
                 </div>
+                {% if total_pages > 1 %}
+                <nav aria-label="Сторінки">
+                    <ul class="pagination justify-content-center mt-3">
+                        {% if page > 1 %}
+                        <li class="page-item"><a class="page-link" href="{{ url_for('handovers', page=page-1, status=selected_status) }}">Попередня</a></li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link">Попередня</span></li>
+                        {% endif %}
+                        {% for p in range(1, total_pages + 1) %}
+                            {% if p == page %}
+                            <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                            {% elif p <= 2 or p >= total_pages - 1 or (p >= page - 1 and p <= page + 1) %}
+                            <li class="page-item"><a class="page-link" href="{{ url_for('handovers', page=p, status=selected_status) }}">{{ p }}</a></li>
+                            {% elif p == page - 2 or p == page + 2 %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                            {% endif %}
+                        {% endfor %}
+                        {% if page < total_pages %}
+                        <li class="page-item"><a class="page-link" href="{{ url_for('handovers', page=page+1, status=selected_status) }}">Наступна</a></li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link">Наступна</span></li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                <p class="text-center text-muted small mt-2">Показано {{ (page - 1) * per_page + 1 }}-{{ min(page * per_page, total_handovers) }} з {{ total_handovers }}</p>
+                {% endif %}
                 {% else %}
                 <p class="text-muted">Немає передач</p>
                 {% endif %}
