@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Логи - Security{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="bi bi-file-text"></i> Логи системи</h1>
+    </div>
+</div>
+
+<!-- Фільтри -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('logs') }}">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label">Рівень</label>
+                            <select name="level" class="form-select">
+                                <option value="">Всі</option>
+                                <option value="INFO" {% if selected_level == 'INFO' %}selected{% endif %}>INFO</option>
+                                <option value="WARNING" {% if selected_level == 'WARNING' %}selected{% endif %}>WARNING</option>
+                                <option value="ERROR" {% if selected_level == 'ERROR' %}selected{% endif %}>ERROR</option>
+                                <option value="SECURITY" {% if selected_level == 'SECURITY' %}selected{% endif %}>SECURITY</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">User ID</label>
+                            <input type="number" name="user_id" class="form-control" value="{{ selected_user_id or '' }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-funnel"></i> Фільтрувати
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Список логів -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="mb-0"><i class="bi bi-list"></i> Список логів ({{ logs|length }})</h5>
+                <div class="d-flex gap-2">
+                    <form method="POST" action="{{ url_for('logs_delete') }}" class="d-inline" onsubmit="return confirm('Видалити всі логи?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="delete_all" value="1">
+                        <button type="submit" class="btn btn-outline-danger btn-sm">
+                            <i class="bi bi-trash"></i> Видалити всі
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ url_for('logs_delete') }}" class="d-inline" id="form-delete-selected" onsubmit="return document.querySelectorAll('input[name=ids]:checked').length && confirm('Видалити вибрані логи?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline-danger btn-sm" id="btn-delete-selected">
+                            <i class="bi bi-trash"></i> Видалити вибрані
+                        </button>
+                    </form>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if logs %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" class="form-check-input" id="select-all-logs" title="Вибрати всі"></th>
+                                <th>Дата/час</th>
+                                <th>Рівень</th>
+                                <th>Повідомлення</th>
+                                <th>User ID</th>
+                                <th>Команда</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr>
+                                <td><input type="checkbox" class="form-check-input log-row-cb" name="ids" form="form-delete-selected" value="{{ log.id }}"></td>
+                                <td>{{ log.timestamp|datetime_format }}</td>
+                                <td>
+                                    {% if log.level == 'ERROR' %}
+                                        <span class="badge bg-danger">ERROR</span>
+                                    {% elif log.level == 'WARNING' %}
+                                        <span class="badge bg-warning">WARNING</span>
+                                    {% elif log.level == 'SECURITY' %}
+                                        <span class="badge bg-danger">SECURITY</span>
+                                    {% else %}
+                                        <span class="badge bg-info">INFO</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ log.message[:200] }}{% if log.message|length > 200 %}...{% endif %}</td>
+                                <td>{{ log.user_id or '-' }}</td>
+                                <td>{{ log.command or '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">Немає логів</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('select-all-logs')?.addEventListener('change', function() {
+    document.querySelectorAll('.log-row-cb').forEach(function(cb) { cb.checked = this.checked; }, this);
+});
+</script>
+{% endblock %}

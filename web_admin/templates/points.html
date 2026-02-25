@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}Бали охоронців - Security{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="bi bi-star"></i> Бали охоронців</h1>
+    </div>
+</div>
+
+<!-- Таблиця охоронців з балансом -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-people"></i> Охоронці та поточні бали</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ПІБ</th>
+                                <th>Об'єкт</th>
+                                <th>Бали</th>
+                                <th>Дії</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for guard in guards %}
+                            <tr>
+                                <td><strong>{{ guard.full_name }}</strong><br><small class="text-muted">@{{ guard.username or '—' }}</small></td>
+                                <td>{{ objects_by_id.get(guard.object_id, '—') }}</td>
+                                <td>
+                                    {% set bal = balances.get(guard.user_id, 0) %}
+                                    {% if bal > 0 %}<span class="text-success fw-bold">+{{ bal }}</span>
+                                    {% elif bal < 0 %}<span class="text-danger fw-bold">{{ bal }}</span>
+                                    {% else %}<span class="text-muted">0</span>{% endif %}
+                                </td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addPointsModal" data-guard-id="{{ guard.user_id }}" data-guard-name="{{ guard.full_name }}">
+                                        <i class="bi bi-plus-slash-minus"></i> Нарахувати
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if not guards %}
+                <p class="text-muted mb-0">Немає охоронців.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальне вікно: нарахувати бали -->
+<div class="modal fade" id="addPointsModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('points_add') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-star"></i> Нарахувати бали</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Охоронець</label>
+                        <select name="guard_id" id="addPointsGuardSelect" class="form-select" required>
+                            <option value="">— Оберіть охоронця —</option>
+                            {% for guard in guards %}
+                            <option value="{{ guard.user_id }}">{{ guard.full_name }} (@{{ guard.username or '—' }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Бали <span class="text-muted">(додатні — бонус, від'ємні — штраф)</span></label>
+                        <input type="number" name="points_delta" class="form-control" required placeholder="наприклад 5 або -3" step="1">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Причина <span class="text-muted">(необов'язково)</span></label>
+                        <textarea name="reason" class="form-control" rows="2" maxlength="500" placeholder="Коротко вкажіть причину"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check"></i> Нарахувати</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальне вікно: редагувати запис балів -->
+<div class="modal fade" id="editPointsModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" id="editPointsForm" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-pencil"></i> Редагувати запис балів</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Бали <span class="text-muted">(додатні — бонус, від'ємні — штраф)</span></label>
+                        <input type="number" name="points_delta" id="editPointsDelta" class="form-control" required step="1">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Причина <span class="text-muted">(необов'язково)</span></label>
+                        <textarea name="reason" id="editPointsReason" class="form-control" rows="2" maxlength="500"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check"></i> Зберегти</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Історія операцій -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Історія операцій</h5>
+            </div>
+            <div class="card-body">
+                {% if history %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Дата</th>
+                                <th>Охоронець</th>
+                                <th>Бали</th>
+                                <th>Причина</th>
+                                <th>Нарахував</th>
+                                <th>Дії</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in history %}
+                            <tr>
+                                <td>{{ item.created_at|datetime_format }}</td>
+                                <td>{{ item.guard_name }}</td>
+                                <td>{% if item.points_delta > 0 %}<span class="text-success fw-bold">+{{ item.points_delta }}</span>{% else %}<span class="text-danger fw-bold">{{ item.points_delta }}</span>{% endif %}</td>
+                                <td>{{ item.reason or '—' }}</td>
+                                <td>{{ item.created_by_name }}</td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editPointsModal" data-point-id="{{ item.id }}" data-point-delta="{{ item.points_delta }}" data-point-reason="{{ item.reason or '' }}">
+                                        <i class="bi bi-pencil"></i> Редагувати
+                                    </button>
+                                    <form method="POST" action="{{ url_for('points_delete', point_id=item.id) }}" class="d-inline" onsubmit="return confirm('Видалити цей запис балів? Баланс охоронця зміниться.');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Видалити</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Історія порожня.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var addModal = document.getElementById('addPointsModal');
+    if (addModal) {
+        addModal.addEventListener('show.bs.modal', function (e) {
+            var btn = e.relatedTarget;
+            var guardId = btn && btn.getAttribute('data-guard-id');
+            var select = document.getElementById('addPointsGuardSelect');
+            if (guardId && select) select.value = guardId;
+        });
+    }
+    var editModal = document.getElementById('editPointsModal');
+    var editForm = document.getElementById('editPointsForm');
+    if (editModal && editForm) {
+        editModal.addEventListener('show.bs.modal', function (e) {
+            var btn = e.relatedTarget;
+            var pointId = btn && btn.getAttribute('data-point-id');
+            var delta = btn && btn.getAttribute('data-point-delta');
+            var reason = btn && btn.getAttribute('data-point-reason');
+            if (pointId) {
+                editForm.action = '{{ url_for("points_edit", point_id=0) }}'.replace('/0', '/' + pointId);
+                document.getElementById('editPointsDelta').value = delta || '';
+                document.getElementById('editPointsReason').value = reason || '';
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}

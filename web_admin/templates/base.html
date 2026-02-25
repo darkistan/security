@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="uk" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>{% block title %}Security{% endblock %}</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{{ url_for('manifest') }}">
+    <!-- iOS PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Зміни охоронців">
+    <link rel="apple-touch-icon" href="{{ url_for('apple_touch_icon') }}">
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#0d6efd">
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    {% block extra_css %}{% endblock %}
+</head>
+<body data-bs-theme="dark">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{url_for('dashboard')}}">
+                <i class="bi bi-shield-check"></i> Security
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{url_for('dashboard')}}">
+                            <i class="bi bi-speedometer2"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{url_for('journal')}}">
+                            <i class="bi bi-journal-bookmark"></i> Журнал
+                        </a>
+                    </li>
+                    {% if current_user.is_authenticated %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="schedulesDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-calendar3"></i> Графіки
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('schedule_page') }}">
+                                <i class="bi bi-calendar3"></i> Графік змін
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('vacation_schedule_page') }}">
+                                <i class="bi bi-calendar-check"></i> Графік відпусток
+                            </a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+                    {% if current_user.is_authenticated and current_user.is_admin %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-tools"></i> Адміністрування
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('guards') }}">
+                                <i class="bi bi-people"></i> Охоронці
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('objects') }}">
+                                <i class="bi bi-building"></i> Об'єкти
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('points') }}">
+                                <i class="bi bi-star"></i> Бали
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('announcements') }}">
+                                <i class="bi bi-megaphone"></i> Оголошення
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logs') }}">
+                                <i class="bi bi-file-text"></i> Логи системи
+                            </a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+                </ul>
+                <ul class="navbar-nav">
+                    {% if current_user.is_authenticated %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> {{ current_user.full_name }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">
+                                <i class="bi bi-box-arrow-right"></i> Вихід
+                            </a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Main Content -->
+    <div class="container-fluid mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </div>
+    
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_js %}{% endblock %}
+    <!-- Service Worker Registration -->
+    <script>
+        window.addEventListener('load', function() {
+            try {
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register('/sw.js')
+                        .then(function(registration) {
+                            console.log('Service Worker registered:', registration.scope);
+                        })
+                        .catch(function(error) {
+                            console.log('Service Worker registration failed (non-critical):', error);
+                        });
+                }
+            } catch (e) {
+                console.error('Service Worker registration error:', e);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Об'єкти - Security{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="bi bi-building"></i> Управління об'єктами</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list"></i> Список об'єктів</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Назва</th>
+                                <th>Тип охорони</th>
+                                <th>Статус</th>
+                                <th>Дії</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for obj in objects %}
+                            <tr>
+                                <td>{{ obj.id }}</td>
+                                <td>{{ obj.name }}</td>
+                                <td>
+                                    {% if obj.protection_type == 'TEMPORARY_SINGLE' %}
+                                        <span class="badge bg-info">Один охоронець почасово</span>
+                                    {% else %}
+                                        <span class="badge bg-primary">Позмінна</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if obj.is_active %}
+                                        <span class="badge bg-success">Активний</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Неактивний</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editModal{{ obj.id }}">
+                                        <i class="bi bi-pencil"></i> Редагувати
+                                    </button>
+                                    <form method="POST" action="{{ url_for('delete_object', object_id=obj.id) }}" style="display:inline;" onsubmit="return confirm('Ви впевнені, що хочете видалити об\'єкт {{ obj.name }}? Це неможливо, якщо на об\'єкті є користувачі або активні зміни.');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit" class="btn btn-sm btn-danger">
+                                            <i class="bi bi-trash"></i> Видалити
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            
+                            <!-- Modal редагування -->
+                            <div class="modal fade" id="editModal{{ obj.id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Редагувати об'єкт</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{{ url_for('edit_object', object_id=obj.id) }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <div class="modal-body">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Назва об'єкта</label>
+                                                    <input type="text" name="name" class="form-control" value="{{ obj.name }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Тип охорони</label>
+                                                    <select name="protection_type" class="form-select">
+                                                        <option value="SHIFT" {% if obj.protection_type != 'TEMPORARY_SINGLE' %}selected{% endif %}>Позмінна</option>
+                                                        <option value="TEMPORARY_SINGLE" {% if obj.protection_type == 'TEMPORARY_SINGLE' %}selected{% endif %}>Один охоронець почасово</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                                                <button type="submit" class="btn btn-primary">Зберегти</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

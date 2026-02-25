@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}Зміни - Security{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="bi bi-clock-history"></i> Зміни</h1>
+    </div>
+</div>
+
+<!-- Фільтри -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('shifts') }}">
+                    <div class="row">
+                        {% if current_user.is_senior %}
+                        <div class="col-md-3">
+                            <label class="form-label">Охоронець</label>
+                            <select name="guard_id" class="form-select">
+                                <option value="">Всі</option>
+                                {% for guard in guards %}
+                                <option value="{{ guard.user_id }}" {% if guard.user_id == selected_guard_id %}selected{% endif %}>
+                                    {{ guard.full_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+                        <div class="col-md-3">
+                            <label class="form-label">Об'єкт</label>
+                            <select name="object_id" class="form-select">
+                                <option value="">Всі</option>
+                                {% for obj in objects %}
+                                <option value="{{ obj.id }}" {% if obj.id == selected_object_id %}selected{% endif %}>{{ obj.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Статус</label>
+                            <select name="status" class="form-select">
+                                <option value="">Всі</option>
+                                <option value="ACTIVE" {% if selected_status == 'ACTIVE' %}selected{% endif %}>Активна</option>
+                                <option value="COMPLETED" {% if selected_status == 'COMPLETED' %}selected{% endif %}>Завершена</option>
+                                <option value="HANDED_OVER" {% if selected_status == 'HANDED_OVER' %}selected{% endif %}>Передана</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-funnel"></i> Фільтрувати
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Список змін -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list"></i> Список змін ({{ shifts|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if shifts %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Охоронець</th>
+                                <th>Об'єкт</th>
+                                <th>Початок</th>
+                                <th>Завершення</th>
+                                <th>Статус</th>
+                                <th>Дії</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for shift in shifts %}
+                            <tr {% if shift.status == 'ACTIVE' %}class="table-success"{% elif shift.status == 'COMPLETED' %}class="table-secondary"{% elif shift.status == 'HANDED_OVER' %}class="table-info"{% endif %}>
+                                <td>
+                                    #{{ shift.id }}
+                                    {% if shift.status == 'ACTIVE' %}
+                                        <span class="badge bg-success ms-1">🟢 АКТИВНА</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <strong>{{ shift.guard_full_name }}</strong><br>
+                                    <small class="text-muted">{{ shift.guard_phone or '—' }}</small>
+                                </td>
+                                <td>
+                                    {% for obj in objects %}
+                                        {% if obj.id == shift.object_id %}{{ obj.name }}{% endif %}
+                                    {% endfor %}
+                                </td>
+                                <td>{{ shift.start_time|datetime_format }}</td>
+                                <td>
+                                    {% if shift.end_time %}
+                                        {{ shift.end_time|datetime_format }}
+                                    {% elif shift.status == 'ACTIVE' %}
+                                        <span class="text-muted">-</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if shift.status == 'ACTIVE' %}
+                                        <span class="badge bg-success">🟢 Активна</span>
+                                    {% elif shift.status == 'COMPLETED' %}
+                                        <span class="badge bg-secondary">✅ Завершена</span>
+                                    {% elif shift.status == 'HANDED_OVER' %}
+                                        <span class="badge bg-info">🔄 Передана</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('shift_detail', shift_id=shift.id) }}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-eye"></i> Деталі
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">Немає змін</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

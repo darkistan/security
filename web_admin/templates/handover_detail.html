@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Передача #{{ handover.id }} - Security{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="bi bi-arrow-left-right"></i> Передача #{{ handover.id }}</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Інформація про передачу</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Зміна:</strong> <a href="{{ url_for('shift_detail', shift_id=handover.shift_id) }}">#{{ handover.shift_id }}</a></p>
+                <p><strong>Здавач:</strong> {{ handover_by.full_name if handover_by else ("ID: " + handover.handover_by_id|string) }}{% if handover_by and handover_by.phone %} — {{ handover_by.phone }}{% endif %}</p>
+                <p><strong>Приймач:</strong> {{ handover_to.full_name if handover_to else ("ID: " + handover.handover_to_id|string) }}{% if handover_to and handover_to.phone %} — {{ handover_to.phone }}{% endif %}</p>
+                <p><strong>Статус:</strong> 
+                    {% if handover.status == 'PENDING' %}
+                        <span class="badge bg-warning">Очікує підтвердження</span>
+                    {% elif handover.status == 'ACCEPTED' %}
+                        <span class="badge bg-success">Прийнято</span>
+                    {% elif handover.status == 'ACCEPTED_WITH_NOTES' %}
+                        <span class="badge bg-danger">Прийнято з зауваженнями</span>
+                    {% endif %}
+                </p>
+                <p><strong>Передано:</strong> {{ handover.handed_over_at|datetime_format }}</p>
+                {% if handover.accepted_at %}
+                <p><strong>Прийнято:</strong> {{ handover.accepted_at|datetime_format }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Зведення подій</h5>
+            </div>
+            <div class="card-body">
+                <pre style="white-space: pre-wrap;">{{ handover.summary }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if handover.notes %}
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">Зауваження</h5>
+            </div>
+            <div class="card-body">
+                <pre style="white-space: pre-wrap;">{{ handover.notes }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row mt-3">
+    <div class="col-12">
+        <a href="{{ url_for('handovers') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Назад до списку
+        </a>
+        {% if current_user.is_admin %}
+        <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#editHandoverModal">
+            <i class="bi bi-pencil"></i> Редагувати
+        </button>
+        <form method="POST" action="{{ url_for('delete_handover', handover_id=handover.id) }}" style="display:inline;" onsubmit="return confirm('Ви впевнені, що хочете видалити передачу #{{ handover.id }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" class="btn btn-danger">
+                <i class="bi bi-trash"></i> Видалити
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+{% if current_user.is_admin %}
+<!-- Modal для редагування передачі -->
+<div class="modal fade" id="editHandoverModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редагувати передачу #{{ handover.id }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('edit_handover', handover_id=handover.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Зведення подій</label>
+                        <textarea class="form-control" name="summary" rows="10" required>{{ handover.summary }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Зауваження</label>
+                        <textarea class="form-control" name="notes" rows="5">{{ handover.notes or '' }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Статус</label>
+                        <select class="form-select" name="status" required>
+                            <option value="PENDING" {% if handover.status == 'PENDING' %}selected{% endif %}>Очікує підтвердження</option>
+                            <option value="ACCEPTED" {% if handover.status == 'ACCEPTED' %}selected{% endif %}>Прийнято</option>
+                            <option value="ACCEPTED_WITH_NOTES" {% if handover.status == 'ACCEPTED_WITH_NOTES' %}selected{% endif %}>Прийнято з зауваженнями</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="submit" class="btn btn-primary">Зберегти</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

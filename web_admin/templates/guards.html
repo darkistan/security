@@ -1,0 +1,693 @@
+{% extends "base.html" %}
+
+{% block title %}Охоронці - Security{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="bi bi-people"></i> Управління охоронцями</h1>
+    </div>
+</div>
+
+<!-- Запити на доступ -->
+{% if pending_requests %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-white">
+                <h5><i class="bi bi-clock"></i> Запити на доступ ({{ pending_requests|length }})</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>User ID</th>
+                                <th>Username</th>
+                                <th>Дата запиту</th>
+                                <th>Дії</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for req in pending_requests %}
+                            <tr>
+                                <td>{{ req.user_id }}</td>
+                                <td>@{{ req.username }}</td>
+                                <td>{{ req.timestamp.strftime('%d.%m.%Y %H:%M') if req.timestamp else 'Невідомо' }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#approveModal{{ req.user_id }}">
+                                        <i class="bi bi-check"></i> Схвалити
+                                    </button>
+                                    <form method="POST" action="{{ url_for('deny_user', user_id=req.user_id) }}" style="display:inline;">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit" class="btn btn-sm btn-danger">
+                                            <i class="bi bi-x"></i> Відхилити
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            
+                            <!-- Modal для схвалення -->
+                            <div class="modal fade" id="approveModal{{ req.user_id }}" tabindex="-1">
+                                <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Схвалити користувача</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{{ url_for('approve_user', user_id=req.user_id) }}" id="approveForm{{ req.user_id }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <div class="modal-body">
+                                                <div class="mb-3">
+                                                    <label class="form-label">ПІБ (Повне Ім'я та Прізвище) <span class="text-danger">*</span></label>
+                                                    <input type="text" name="full_name" class="form-control" placeholder="Наприклад: Іван Петренко" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Телефон <span class="text-danger">*</span></label>
+                                                    <input type="text" name="phone" class="form-control" placeholder="+380501234567" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Об'єкт <span class="text-danger">*</span></label>
+                                                    <select name="object_id" class="form-select" required>
+                                                        <option value="">-- Виберіть об'єкт --</option>
+                                                        {% for obj in objects %}
+                                                        <option value="{{ obj.id }}">{{ obj.name }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Роль</label>
+                                                    <select name="role" class="form-select">
+                                                        <option value="guard">Охоронець</option>
+                                                        <option value="senior">Старший</option>
+                                                        <option value="admin">Адміністратор</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                                                <button type="submit" class="btn btn-success">Схвалити</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Додати веб-користувача -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-person-plus"></i> Додати веб-користувача (без Telegram)</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('add_web_guard') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label class="form-label">ПІБ <span class="text-danger">*</span></label>
+                            <input type="text" name="full_name" class="form-control" placeholder="Іван Петренко" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Username</label>
+                            <input type="text" name="username" class="form-control" placeholder="ivan_petrenko">
+                            <small class="text-muted">Опціонально</small>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Пароль <span class="text-danger">*</span></label>
+                            <input type="password" name="password" class="form-control" placeholder="Мінімум 6 символів" required minlength="6">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Телефон <span class="text-danger">*</span></label>
+                            <input type="text" name="phone" class="form-control" placeholder="+380501234567" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Об'єкт <span class="text-danger">*</span></label>
+                            <select name="object_id" class="form-select" required>
+                                <option value="">-- Виберіть --</option>
+                                {% for obj in objects %}
+                                <option value="{{ obj.id }}">{{ obj.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label">Роль</label>
+                            <select name="role" class="form-select">
+                                <option value="guard">Охоронець</option>
+                                <option value="senior">Старший</option>
+                                <option value="admin">Адмін</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-plus"></i> Додати
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Додати охоронця (Telegram) -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-telegram"></i> Додати охоронця (Telegram)</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('add_guard') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <div class="row">
+                        <div class="col-md-2">
+                            <label class="form-label">Telegram ID <span class="text-danger">*</span></label>
+                            <input type="number" name="user_id" class="form-control" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Username</label>
+                            <input type="text" name="username" class="form-control" placeholder="@username">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">ПІБ <span class="text-danger">*</span></label>
+                            <input type="text" name="full_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Телефон <span class="text-danger">*</span></label>
+                            <input type="text" name="phone" class="form-control" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Об'єкт <span class="text-danger">*</span></label>
+                            <select name="object_id" class="form-select" required>
+                                <option value="">-- Виберіть --</option>
+                                {% for obj in objects %}
+                                <option value="{{ obj.id }}">{{ obj.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-info w-100">
+                                <i class="bi bi-plus"></i> Додати
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Список охоронців -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list"></i> Охоронці ({{ total_guards }})</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>
+                                    {% if sort_by == 'user_id' %}
+                                        {% set next_order_id = 'asc' if sort_order == 'desc' else 'desc' %}
+                                    {% else %}
+                                        {% set next_order_id = 'asc' %}
+                                    {% endif %}
+                                    <a href="{{ url_for('guards', sort_by='user_id', sort_order=next_order_id) }}" class="text-decoration-none text-reset">
+                                        User ID
+                                        {% if sort_by == 'user_id' %}
+                                            {% if sort_order == 'asc' %}<i class="bi bi-arrow-up"></i>{% else %}<i class="bi bi-arrow-down"></i>{% endif %}
+                                        {% endif %}
+                                    </a>
+                                </th>
+                                <th>
+                                    {% if sort_by == 'username' %}
+                                        {% set next_order_username = 'asc' if sort_order == 'desc' else 'desc' %}
+                                    {% else %}
+                                        {% set next_order_username = 'asc' %}
+                                    {% endif %}
+                                    <a href="{{ url_for('guards', sort_by='username', sort_order=next_order_username) }}" class="text-decoration-none text-reset">
+                                        Username
+                                        {% if sort_by == 'username' %}
+                                            {% if sort_order == 'asc' %}<i class="bi bi-arrow-up"></i>{% else %}<i class="bi bi-arrow-down"></i>{% endif %}
+                                        {% endif %}
+                                    </a>
+                                </th>
+                                <th>
+                                    {% if sort_by == 'full_name' %}
+                                        {% set next_order_name = 'asc' if sort_order == 'desc' else 'desc' %}
+                                    {% else %}
+                                        {% set next_order_name = 'asc' %}
+                                    {% endif %}
+                                    <a href="{{ url_for('guards', sort_by='full_name', sort_order=next_order_name) }}" class="text-decoration-none text-reset">
+                                        ПІБ
+                                        {% if sort_by == 'full_name' %}
+                                            {% if sort_order == 'asc' %}<i class="bi bi-arrow-up"></i>{% else %}<i class="bi bi-arrow-down"></i>{% endif %}
+                                        {% endif %}
+                                    </a>
+                                </th>
+                                <th>
+                                    {% if sort_by == 'phone' %}
+                                        {% set next_order_phone = 'asc' if sort_order == 'desc' else 'desc' %}
+                                    {% else %}
+                                        {% set next_order_phone = 'asc' %}
+                                    {% endif %}
+                                    <a href="{{ url_for('guards', sort_by='phone', sort_order=next_order_phone) }}" class="text-decoration-none text-reset">
+                                        Телефон
+                                        {% if sort_by == 'phone' %}
+                                            {% if sort_order == 'asc' %}<i class="bi bi-arrow-up"></i>{% else %}<i class="bi bi-arrow-down"></i>{% endif %}
+                                        {% endif %}
+                                    </a>
+                                </th>
+                                <th>
+                                    {% if sort_by == 'object_id' %}
+                                        {% set next_order_object = 'asc' if sort_order == 'desc' else 'desc' %}
+                                    {% else %}
+                                        {% set next_order_object = 'asc' %}
+                                    {% endif %}
+                                    <a href="{{ url_for('guards', sort_by='object_id', sort_order=next_order_object) }}" class="text-decoration-none text-reset">
+                                        Об'єкт
+                                        {% if sort_by == 'object_id' %}
+                                            {% if sort_order == 'asc' %}<i class="bi bi-arrow-up"></i>{% else %}<i class="bi bi-arrow-down"></i>{% endif %}
+                                        {% endif %}
+                                    </a>
+                                </th>
+                                <th>
+                                    {% if sort_by == 'role' %}
+                                        {% set next_order_role = 'asc' if sort_order == 'desc' else 'desc' %}
+                                    {% else %}
+                                        {% set next_order_role = 'asc' %}
+                                    {% endif %}
+                                    <a href="{{ url_for('guards', sort_by='role', sort_order=next_order_role) }}" class="text-decoration-none text-reset">
+                                        Роль
+                                        {% if sort_by == 'role' %}
+                                            {% if sort_order == 'asc' %}<i class="bi bi-arrow-up"></i>{% else %}<i class="bi bi-arrow-down"></i>{% endif %}
+                                        {% endif %}
+                                    </a>
+                                </th>
+                                <th>Статус</th>
+                                <th>Активна зміна</th>
+                                <th>Дії</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for guard in guards %}
+                            <tr>
+                                <td>
+                                    {{ guard.user_id }}
+                                    {% if guard.user_id < 0 %}
+                                    <span class="badge bg-secondary" title="Веб-користувач (без Telegram)">WEB</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if guard.username %}
+                                    @{{ guard.username }}
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ guard.full_name or 'Не встановлено' }}</td>
+                                <td>{{ guard.phone }}</td>
+                                <td>
+                                    {% if guard.object_id %}
+                                    {% for obj in objects %}
+                                        {% if obj.id == guard.object_id %}
+                                        {{ obj.name }}
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% else %}
+                                    <span class="text-muted">Не встановлено</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if guard.role == 'admin' %}
+                                    <span class="badge bg-danger">Адмін</span>
+                                    {% elif guard.role == 'senior' %}
+                                    <span class="badge bg-warning">Старший</span>
+                                    {% else %}
+                                    <span class="badge bg-info">Охоронець</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if guard.is_active %}
+                                    <span class="badge bg-success">Активний</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Неактивний</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if active_shifts.get(guard.user_id) %}
+                                        {% set shift = active_shifts[guard.user_id] %}
+                                        <span class="badge bg-success">🟢 Зміна #{{ shift['id'] }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">⚪ Немає</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#fullNameModal{{ guard.user_id }}">
+                                            <i class="bi bi-person"></i> ПІБ
+                                        </button>
+                                        <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#passwordModal{{ guard.user_id }}">
+                                            <i class="bi bi-key"></i> Пароль
+                                        </button>
+                                        <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editModal{{ guard.user_id }}">
+                                            <i class="bi bi-pencil"></i> Редагувати
+                                        </button>
+                                        {% if guard.role != 'admin' %}
+                                        {% if guard.is_active %}
+                                        <form method="POST" action="{{ url_for('deactivate_guard', user_id=guard.user_id) }}" style="display:inline;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button type="submit" class="btn btn-sm btn-warning" title="Деактивувати">
+                                                <i class="bi bi-pause"></i>
+                                            </button>
+                                        </form>
+                                        {% else %}
+                                        <form method="POST" action="{{ url_for('activate_guard', user_id=guard.user_id) }}" style="display:inline;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button type="submit" class="btn btn-sm btn-success" title="Активувати">
+                                                <i class="bi bi-play"></i>
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                        {% endif %}
+                                        {% if guard.user_id != 1 %}
+                                        <form method="POST" action="{{ url_for('delete_guard') }}" style="display:inline;" onsubmit="return confirm('Ви впевнені, що хочете видалити охоронця {{ guard.full_name or guard.username or guard.user_id }}?');">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <input type="hidden" name="user_id" value="{{ guard.user_id }}"/>
+                                            <button type="submit" class="btn btn-sm btn-danger">
+                                                <i class="bi bi-trash"></i> Видалити
+                                            </button>
+                                        </form>
+                                        {% else %}
+                                        <button type="button" class="btn btn-sm btn-danger" disabled title="Неможливо видалити системного адміністратора">
+                                            <i class="bi bi-trash"></i> Видалити
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Modal для ПІБ -->
+                            <div class="modal fade" id="fullNameModal{{ guard.user_id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Редагувати ПІБ</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{{ url_for('update_guard_full_name', user_id=guard.user_id) }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <div class="modal-body">
+                                                <div class="mb-3">
+                                                    <label class="form-label">ПІБ (Повне Ім'я та Прізвище)</label>
+                                                    <input type="text" name="full_name" class="form-control" value="{{ guard.full_name or '' }}" placeholder="Наприклад: Іван Петренко">
+                                                    <small class="text-muted">Залиште порожнім, щоб видалити ПІБ</small>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                                                <button type="submit" class="btn btn-primary">Зберегти</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Modal для пароля -->
+                            <div class="modal fade" id="passwordModal{{ guard.user_id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Встановити пароль</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{{ url_for('set_guard_password', user_id=guard.user_id) }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <div class="modal-body">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Новий пароль</label>
+                                                    <input type="password" name="password" class="form-control" required minlength="6">
+                                                    <small class="text-muted">Мінімум 6 символів</small>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                                                <button type="submit" class="btn btn-primary">Встановити</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Modal редагування -->
+                            <div class="modal fade" id="editModal{{ guard.user_id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Редагувати охоронця</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{{ url_for('edit_guard', user_id=guard.user_id) }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <div class="modal-body">
+                                                <div class="mb-3">
+                                                    <label class="form-label">ПІБ</label>
+                                                    <input type="text" name="full_name" class="form-control" value="{{ guard.full_name }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Телефон</label>
+                                                    <input type="text" name="phone" class="form-control" value="{{ guard.phone }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Об'єкт</label>
+                                                    <select name="object_id" class="form-select" required>
+                                                        {% for obj in objects %}
+                                                        <option value="{{ obj.id }}" {% if obj.id == guard.object_id %}selected{% endif %}>{{ obj.name }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Роль</label>
+                                                    {% if guard.role == 'admin' %}
+                                                    <select name="role" class="form-select" disabled>
+                                                        <option value="admin" selected>Адміністратор</option>
+                                                    </select>
+                                                    <input type="hidden" name="role" value="admin">
+                                                    <small class="text-muted">Роль адміністратора не може бути змінена.</small>
+                                                    {% else %}
+                                                    <select name="role" class="form-select">
+                                                        <option value="guard" {% if guard.role == 'guard' %}selected{% endif %}>Охоронець</option>
+                                                        <option value="senior" {% if guard.role == 'senior' %}selected{% endif %}>Старший</option>
+                                                        <option value="admin" {% if guard.role == 'admin' %}selected{% endif %}>Адміністратор</option>
+                                                    </select>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                                                <button type="submit" class="btn btn-primary">Зберегти</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                {% if total_pages > 1 %}
+                <nav aria-label="Навігація по сторінкам">
+                    <ul class="pagination justify-content-center mt-3">
+                        {% if page > 1 %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('guards', page=page-1, sort_by=sort_by, sort_order=sort_order) }}">Попередня</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">Попередня</span>
+                        </li>
+                        {% endif %}
+                        
+                        {% for p in range(1, total_pages + 1) %}
+                            {% if p == page %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ p }}</span>
+                            </li>
+                            {% elif p <= 2 or p >= total_pages - 1 or (p >= page - 1 and p <= page + 1) %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('guards', page=p, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
+                            </li>
+                            {% elif p == page - 2 or p == page + 2 %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page < total_pages %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('guards', page=page+1, sort_by=sort_by, sort_order=sort_order) }}">Наступна</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">Наступна</span>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                <div class="text-center text-muted small mt-2">
+                    Показано {{ (page - 1) * per_page + 1 }}-{{ end_index }} з {{ total_guards }} охоронців
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+table thead th a {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    text-decoration: none;
+    color: var(--bs-body-color) !important;
+}
+
+table thead th a:hover {
+    color: var(--bs-link-color) !important;
+    opacity: 0.8;
+}
+
+table thead th a i {
+    font-size: 0.8em;
+}
+</style>
+
+<script>
+// Функція для агресивного очищення backdrop та modal-open
+function forceCleanupModal() {
+    const backdrops = document.querySelectorAll('.modal-backdrop');
+    backdrops.forEach(function(backdrop) {
+        backdrop.remove();
+    });
+    
+    document.body.classList.remove('modal-open');
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+    
+    const modals = document.querySelectorAll('.modal.show');
+    modals.forEach(function(modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+    });
+}
+
+// Автоматичне закриття модального вікна після успішного submit форми схвалення
+document.addEventListener('DOMContentLoaded', function() {
+    setInterval(function() {
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        const hasModalOpen = document.body.classList.contains('modal-open');
+        const visibleModals = document.querySelectorAll('.modal.show');
+        
+        if ((backdrops.length > 0 || hasModalOpen) && visibleModals.length === 0) {
+            forceCleanupModal();
+        }
+    }, 500);
+    
+    const approveForms = document.querySelectorAll('form[id^="approveForm"]');
+    
+    approveForms.forEach(function(form) {
+        let isSubmitting = false;
+        
+        form.addEventListener('submit', function(e) {
+            if (isSubmitting) {
+                e.preventDefault();
+                return false;
+            }
+            
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            
+            isSubmitting = true;
+            
+            const modalId = form.id.replace('approveForm', 'approveModal');
+            const modalElement = document.getElementById(modalId);
+            
+            if (modalElement) {
+                const bsModal = bootstrap.Modal.getInstance(modalElement);
+                
+                if (bsModal) {
+                    bsModal.hide();
+                }
+                
+                setTimeout(function() {
+                    forceCleanupModal();
+                }, 100);
+                
+                modalElement.addEventListener('hidden.bs.modal', function cleanup() {
+                    forceCleanupModal();
+                    modalElement.removeEventListener('hidden.bs.modal', cleanup);
+                }, { once: true });
+            } else {
+                forceCleanupModal();
+            }
+            
+            const formData = new FormData(form);
+            
+            setTimeout(function() {
+                fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    redirect: 'follow'
+                })
+                .then(function(response) {
+                    forceCleanupModal();
+                    window.location.replace(response.url || '/guards');
+                })
+                .catch(function(error) {
+                    console.error('Помилка схвалення користувача:', error);
+                    isSubmitting = false;
+                    forceCleanupModal();
+                    alert('Помилка схвалення користувача. Спробуйте ще раз.');
+                });
+            }, 300);
+            
+            return false;
+        }, true);
+    });
+    
+    const approveModals = document.querySelectorAll('[id^="approveModal"]');
+    approveModals.forEach(function(modalElement) {
+        modalElement.addEventListener('hidden.bs.modal', function() {
+            forceCleanupModal();
+        });
+    });
+    
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('modal-backdrop')) {
+            forceCleanupModal();
+        }
+    });
+});
+</script>
+{% endblock %}

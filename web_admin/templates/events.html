@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Події - Security{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="bi bi-journal-text"></i> Події</h1>
+    </div>
+</div>
+
+<!-- Фільтри -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('events') }}">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label">Об'єкт</label>
+                            <select name="object_id" class="form-select">
+                                <option value="">Всі</option>
+                                {% for obj in objects %}
+                                <option value="{{ obj.id }}" {% if obj.id == selected_object_id %}selected{% endif %}>{{ obj.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Тип події</label>
+                            <select name="event_type" class="form-select">
+                                <option value="">Всі</option>
+                                <option value="INCIDENT" {% if selected_event_type == 'INCIDENT' %}selected{% endif %}>Інцидент</option>
+                                <option value="POWER_OFF" {% if selected_event_type == 'POWER_OFF' %}selected{% endif %}>Вимкнення світла</option>
+                                <option value="POWER_ON" {% if selected_event_type == 'POWER_ON' %}selected{% endif %}>Відновлення світла</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-funnel"></i> Фільтрувати
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Список подій -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list"></i> Список подій ({{ events|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if events %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Зміна</th>
+                                <th>Охоронець</th>
+                                <th>Тип</th>
+                                <th>Опис</th>
+                                <th>Дата/час</th>
+                                {% if current_user.is_admin %}
+                                <th>Дії</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for event in events %}
+                            <tr>
+                                <td>#{{ event.id }}</td>
+                                <td><a href="{{ url_for('shift_detail', shift_id=event.shift_id) }}">#{{ event.shift_id }}</a></td>
+                                <td>
+                                    <strong>{{ event.guard_full_name }}</strong><br>
+                                    <small class="text-muted">{{ event.guard_phone or '—' }}</small>
+                                </td>
+                                <td><span class="badge bg-info">{{ event.event_type|event_type_ua }}</span></td>
+                                <td>{{ event.description[:100] }}{% if event.description|length > 100 %}...{% endif %}</td>
+                                <td>{{ event.created_at|datetime_format }}</td>
+                                {% if current_user.is_admin %}
+                                <td>
+                                    <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editEventModal{{ event.id }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <form method="POST" action="{{ url_for('delete_event', event_id=event.id) }}" style="display:inline;" onsubmit="return confirm('Видалити подію #{{ event.id }}?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit" class="btn btn-sm btn-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            
+                            {% if current_user.is_admin %}
+                            <!-- Modal для редагування події -->
+                            <div class="modal fade" id="editEventModal{{ event.id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Редагувати подію #{{ event.id }}</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{{ url_for('edit_event', event_id=event.id) }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <div class="modal-body">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Тип події</label>
+                                                    <select class="form-select" name="event_type" required>
+                                                        <option value="INCIDENT" {% if event.event_type == 'INCIDENT' %}selected{% endif %}>Інцидент</option>
+                                                        <option value="POWER_OFF" {% if event.event_type == 'POWER_OFF' %}selected{% endif %}>Вимкнення світла</option>
+                                                        <option value="POWER_ON" {% if event.event_type == 'POWER_ON' %}selected{% endif %}>Відновлення світла</option>
+                                                    </select>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Опис</label>
+                                                    <textarea class="form-control" name="description" rows="5" required>{{ event.description }}</textarea>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                                                <button type="submit" class="btn btn-primary">Зберегти</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">Немає подій</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

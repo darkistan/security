@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Звіти - Security{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="bi bi-file-text"></i> Звіти</h1>
+    </div>
+</div>
+
+<!-- Фільтри -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('reports') }}">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label">Об'єкт</label>
+                            <select name="object_id" class="form-select">
+                                <option value="">Всі</option>
+                                {% for obj in objects %}
+                                <option value="{{ obj.id }}" {% if obj.id == selected_object_id %}selected{% endif %}>{{ obj.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-funnel"></i> Фільтрувати
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Список звітів -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list"></i> Список звітів ({{ reports|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if reports %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Об'єкт</th>
+                                <th>Період</th>
+                                <th>Здавач</th>
+                                <th>Приймач</th>
+                                <th>Подій</th>
+                                <th>Дата створення</th>
+                                <th>Дії</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for report in reports %}
+                            <tr>
+                                <td>#{{ report.id }}</td>
+                                <td>
+                                    {% for obj in objects %}
+                                        {% if obj.id == report.object_id %}{{ obj.name }}{% endif %}
+                                    {% endfor %}
+                                </td>
+                                <td>{{ report.shift_start|datetime_format }} - {{ report.shift_end|datetime_format }}</td>
+                                <td>
+                                    <strong>{{ report.handover_by_full_name }}</strong><br>
+                                    <small class="text-muted">{{ report.handover_by_phone or '—' }}</small>
+                                </td>
+                                <td>
+                                    <strong>{{ report.handover_to_full_name }}</strong><br>
+                                    <small class="text-muted">{{ report.handover_to_phone or '—' }}</small>
+                                </td>
+                                <td>{{ report.events_count }}</td>
+                                <td>{{ report.created_at|datetime_format }}</td>
+                                <td>
+                                    <a href="{{ url_for('report_detail', report_id=report.id) }}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-eye"></i> Деталі
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">Немає звітів</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

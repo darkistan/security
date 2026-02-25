@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Зміна #{{ shift.id }} - Security{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="bi bi-clock-history"></i> Зміна #{{ shift.id }}</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Інформація про зміну</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Охоронець:</strong> {{ guard.full_name if guard else ("ID: " + shift.guard_id|string) }}</p>
+                <p><strong>Телефон:</strong> {{ guard.phone if guard and guard.phone else '—' }}</p>
+                <p><strong>Початок:</strong> {{ shift.start_time|datetime_format }}</p>
+                <p><strong>Завершення:</strong> {{ shift.end_time|datetime_format if shift.end_time else 'Не завершена' }}</p>
+                <p><strong>Статус:</strong> 
+                    {% if shift.status == 'ACTIVE' %}
+                        <span class="badge bg-success">Активна</span>
+                    {% elif shift.status == 'COMPLETED' %}
+                        <span class="badge bg-info">Завершена</span>
+                    {% elif shift.status == 'HANDED_OVER' %}
+                        <span class="badge bg-primary">Передана</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Події зміни ({{ events|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if events %}
+                <div class="list-group">
+                    {% for event in events %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ event.event_type|event_type_ua }}</h6>
+                            <small>{{ event.created_at|datetime_format }}</small>
+                        </div>
+                        <p class="mb-1">{{ event.description }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">Подій немає</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-12">
+        <a href="{{ url_for('shifts') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Назад до списку
+        </a>
+        {% if current_user.is_admin %}
+        <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#editShiftModal">
+            <i class="bi bi-pencil"></i> Редагувати
+        </button>
+        <form method="POST" action="{{ url_for('delete_shift', shift_id=shift.id) }}" style="display:inline;" onsubmit="return confirm('Ви впевнені, що хочете видалити зміну #{{ shift.id }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" class="btn btn-danger">
+                <i class="bi bi-trash"></i> Видалити
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+{% if current_user.is_admin %}
+<!-- Modal для редагування зміни -->
+<div class="modal fade" id="editShiftModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редагувати зміну #{{ shift.id }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('edit_shift', shift_id=shift.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Охоронець (User ID)</label>
+                        <input type="number" class="form-control" name="guard_id" value="{{ shift.guard_id }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Об'єкт</label>
+                        <select class="form-select" name="object_id" required>
+                            {% for obj in objects %}
+                            <option value="{{ obj.id }}" {% if obj.id == shift.object_id %}selected{% endif %}>{{ obj.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Час початку</label>
+                        <input type="datetime-local" class="form-control" name="start_time" value="{{ shift.start_time[:16] if shift.start_time else '' }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Час завершення</label>
+                        <input type="datetime-local" class="form-control" name="end_time" value="{{ shift.end_time[:16] if shift.end_time else '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Статус</label>
+                        <select class="form-select" name="status" required>
+                            <option value="ACTIVE" {% if shift.status == 'ACTIVE' %}selected{% endif %}>Активна</option>
+                            <option value="COMPLETED" {% if shift.status == 'COMPLETED' %}selected{% endif %}>Завершена</option>
+                            <option value="HANDED_OVER" {% if shift.status == 'HANDED_OVER' %}selected{% endif %}>Передана</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="submit" class="btn btn-primary">Зберегти</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

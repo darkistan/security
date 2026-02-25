@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}Звіт #{{ report.id }} - Security{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="bi bi-file-text"></i> Звіт #{{ report.id }}</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Інформація про звіт</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Об'єкт:</strong> {{ obj.name if obj else ("Об'єкт #" + report.object_id|string) }}</p>
+                <p><strong>Період зміни:</strong> {{ report.shift_start|datetime_format }} - {{ report.shift_end|datetime_format }}</p>
+                <p><strong>Здавач:</strong> {{ handover_by.full_name if handover_by else ("ID: " + report.handover_by_id|string) }}{% if handover_by and handover_by.phone %} — {{ handover_by.phone }}{% endif %}</p>
+                <p><strong>Приймач:</strong> {{ handover_to.full_name if handover_to else ("ID: " + report.handover_to_id|string) }}{% if handover_to and handover_to.phone %} — {{ handover_to.phone }}{% endif %}</p>
+                <p><strong>Кількість подій:</strong> {{ report.events_count }}</p>
+                <p><strong>Дата створення:</strong> {{ report.created_at|datetime_format }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">Зауваження</h5>
+            </div>
+            <div class="card-body">
+                <pre style="white-space: pre-wrap;">{{ report.notes }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-12">
+        <a href="{{ url_for('reports') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Назад до списку
+        </a>
+        {% if current_user.is_admin %}
+        <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#editReportModal">
+            <i class="bi bi-pencil"></i> Редагувати
+        </button>
+        <form method="POST" action="{{ url_for('delete_report', report_id=report.id) }}" style="display:inline;" onsubmit="return confirm('Ви впевнені, що хочете видалити звіт #{{ report.id }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" class="btn btn-danger">
+                <i class="bi bi-trash"></i> Видалити
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+{% if current_user.is_admin %}
+<!-- Modal для редагування звіту -->
+<div class="modal fade" id="editReportModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редагувати звіт #{{ report.id }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('edit_report', report_id=report.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Зауваження</label>
+                        <textarea class="form-control" name="notes" rows="10" required>{{ report.notes }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="submit" class="btn btn-primary">Зберегти</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Віртуальне середовище
+venv/
+.venv/
+env/
+.env/
+
+# Секрети та конфіг з даними
+config.env
+.env
+.env.local
+*.env.local
+
+# База даних (локальні копії)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Логи
+logs.txt
+*.log
+debug-*.log
+
+# IDE та ОС
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Flask
+instance/
+.webassets-cache
+
+# Тести / звіти
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/

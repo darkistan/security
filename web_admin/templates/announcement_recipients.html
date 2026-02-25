@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Отримувачі оголошення #{{ announcement.id }} - Security{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="mb-0"><i class="bi bi-people"></i> Отримувачі оголошення #{{ announcement.id }}</h1>
+            <a href="{{ url_for('announcements') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Назад до списку</a>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-info-circle"></i> Інформація про оголошення</h5></div>
+            <div class="card-body">
+                <p><strong>Зміст:</strong><br>{{ announcement.content }}</p>
+                <p><strong>Автор:</strong> @{{ announcement.author_username or '—' }}</p>
+                <p><strong>Пріоритет:</strong>
+                    <span class="badge {% if announcement.priority == 'urgent' %}bg-danger{% elif announcement.priority == 'important' %}bg-warning{% else %}bg-secondary{% endif %}">
+                        {% if announcement.priority == 'urgent' %}Термінове{% elif announcement.priority == 'important' %}Важливе{% else %}Звичайне{% endif %}
+                    </span>
+                </p>
+                <p><strong>Відправлено:</strong> {% if announcement.sent_at %}{{ announcement.sent_at|datetime_format }}{% else %}Невідомо{% endif %}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-list"></i> Список отримувачів ({{ recipients|length }})</h5></div>
+            <div class="card-body">
+                {% if recipients %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>User ID</th>
+                                <th>Username</th>
+                                <th>ПІБ</th>
+                                <th>Статус</th>
+                                <th>Час відправки</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in recipients %}
+                            <tr>
+                                <td>{{ r.recipient_user_id }}</td>
+                                <td>@{{ r.username or '—' }}</td>
+                                <td>{{ r.full_name or '—' }}</td>
+                                <td>
+                                    {% if r.status == 'sent' %}<span class="badge bg-success">Відправлено</span>
+                                    {% elif r.status == 'blocked' %}<span class="badge bg-warning">Заблоковано</span>
+                                    {% else %}<span class="badge bg-danger">Помилка</span>{% endif %}
+                                </td>
+                                <td>{% if r.sent_at %}{{ r.sent_at|datetime_format }}{% else %}—{% endif %}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">Отримувачів не знайдено.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

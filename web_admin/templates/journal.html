@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}Журнал - Security{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="bi bi-journal-bookmark"></i> Журнал</h1>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-3" id="journalTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if tab == 'shifts' %}active{% endif %}" href="{{ url_for('journal', tab='shifts') }}" role="tab">
+            <i class="bi bi-clock-history"></i> Зміни
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if tab == 'events' %}active{% endif %}" href="{{ url_for('journal', tab='events') }}" role="tab">
+            <i class="bi bi-journal-text"></i> Події
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if tab == 'handovers' %}active{% endif %}" href="{{ url_for('journal', tab='handovers') }}" role="tab">
+            <i class="bi bi-arrow-left-right"></i> Передачі
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if tab == 'reports' %}active{% endif %}" href="{{ url_for('journal', tab='reports') }}" role="tab">
+            <i class="bi bi-file-text"></i> Звіти
+        </a>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- Зміни -->
+    <div class="tab-pane fade {% if tab == 'shifts' %}show active{% endif %}" id="shifts" role="tabpanel">
+        <form method="GET" action="{{ url_for('journal') }}" class="mb-3">
+            <input type="hidden" name="tab" value="shifts"/>
+            <div class="row g-2">
+                {% if current_user.is_senior %}
+                <div class="col-md-3">
+                    <label class="form-label">Охоронець</label>
+                    <select name="guard_id" class="form-select form-select-sm">
+                        <option value="">Всі</option>
+                        {% for g in guards %}
+                        <option value="{{ g.user_id }}" {% if g.user_id == selected_guard_id %}selected{% endif %}>{{ g.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                <div class="col-md-3">
+                    <label class="form-label">Об'єкт</label>
+                    <select name="shift_object_id" class="form-select form-select-sm">
+                        <option value="">Всі</option>
+                        {% for obj in objects %}
+                        <option value="{{ obj.id }}" {% if obj.id == selected_shift_object_id %}selected{% endif %}>{{ obj.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Статус</label>
+                    <select name="shift_status" class="form-select form-select-sm">
+                        <option value="">Всі</option>
+                        <option value="ACTIVE" {% if selected_shift_status == 'ACTIVE' %}selected{% endif %}>Активна</option>
+                        <option value="COMPLETED" {% if selected_shift_status == 'COMPLETED' %}selected{% endif %}>Завершена</option>
+                        <option value="HANDED_OVER" {% if selected_shift_status == 'HANDED_OVER' %}selected{% endif %}>Передана</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Фільтр</button>
+                </div>
+            </div>
+        </form>
+        <div class="card">
+            <div class="card-body">
+                <h6><i class="bi bi-list"></i> Зміни ({{ shifts|length }})</h6>
+                {% if shifts %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm">
+                        <thead><tr><th>ID</th><th>Охоронець</th><th>Об'єкт</th><th>Початок</th><th>Завершення</th><th>Статус</th><th>Дії</th></tr></thead>
+                        <tbody>
+                            {% for shift in shifts %}
+                            <tr {% if shift.status == 'ACTIVE' %}class="table-success"{% elif shift.status == 'COMPLETED' %}class="table-secondary"{% elif shift.status == 'HANDED_OVER' %}class="table-info"{% endif %}>
+                                <td>#{{ shift.id }}{% if shift.status == 'ACTIVE' %} <span class="badge bg-success">АКТИВНА</span>{% endif %}</td>
+                                <td><strong>{{ shift.guard_full_name }}</strong><br><small class="text-muted">{{ shift.guard_phone or '—' }}</small></td>
+                                <td>{% for obj in objects %}{% if obj.id == shift.object_id %}{{ obj.name }}{% endif %}{% endfor %}</td>
+                                <td>{{ shift.start_time|datetime_format }}</td>
+                                <td>{% if shift.end_time %}{{ shift.end_time|datetime_format }}{% else %}—{% endif %}</td>
+                                <td>{% if shift.status == 'ACTIVE' %}<span class="badge bg-success">Активна</span>{% elif shift.status == 'COMPLETED' %}<span class="badge bg-secondary">Завершена</span>{% else %}<span class="badge bg-info">Передана</span>{% endif %}</td>
+                                <td><a href="{{ url_for('shift_detail', shift_id=shift.id) }}" class="btn btn-sm btn-primary"><i class="bi bi-eye"></i></a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Немає змін</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Події -->
+    <div class="tab-pane fade {% if tab == 'events' %}show active{% endif %}" id="events" role="tabpanel">
+        <form method="GET" action="{{ url_for('journal') }}" class="mb-3">
+            <input type="hidden" name="tab" value="events"/>
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <label class="form-label">Об'єкт</label>
+                    <select name="ev_object_id" class="form-select form-select-sm">
+                        <option value="">Всі</option>
+                        {% for obj in objects %}
+                        <option value="{{ obj.id }}" {% if obj.id == selected_ev_object_id %}selected{% endif %}>{{ obj.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Тип події</label>
+                    <select name="event_type" class="form-select form-select-sm">
+                        <option value="">Всі</option>
+                        <option value="INCIDENT" {% if selected_event_type == 'INCIDENT' %}selected{% endif %}>Інцидент</option>
+                        <option value="POWER_OFF" {% if selected_event_type == 'POWER_OFF' %}selected{% endif %}>Вимкнення світла</option>
+                        <option value="POWER_ON" {% if selected_event_type == 'POWER_ON' %}selected{% endif %}>Відновлення світла</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Фільтр</button>
+                </div>
+            </div>
+        </form>
+        <div class="card">
+            <div class="card-body">
+                <h6><i class="bi bi-list"></i> Події ({{ events|length }})</h6>
+                {% if events %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm">
+                        <thead><tr><th>ID</th><th>Зміна</th><th>Охоронець</th><th>Тип</th><th>Опис</th><th>Дата/час</th><th>Дії</th></tr></thead>
+                        <tbody>
+                            {% for event in events %}
+                            <tr>
+                                <td>#{{ event.id }}</td>
+                                <td><a href="{{ url_for('shift_detail', shift_id=event.shift_id) }}">#{{ event.shift_id }}</a></td>
+                                <td><strong>{{ event.guard_full_name }}</strong><br><small class="text-muted">{{ event.guard_phone or '—' }}</small></td>
+                                <td><span class="badge bg-info">{{ event.event_type|event_type_ua }}</span></td>
+                                <td>{{ event.description[:80] }}{% if event.description|length > 80 %}...{% endif %}</td>
+                                <td>{{ event.created_at|datetime_format }}</td>
+                                <td><a href="{{ url_for('shift_detail', shift_id=event.shift_id) }}" class="btn btn-sm btn-primary"><i class="bi bi-eye"></i></a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Немає подій</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Передачі -->
+    <div class="tab-pane fade {% if tab == 'handovers' %}show active{% endif %}" id="handovers" role="tabpanel">
+        <form method="GET" action="{{ url_for('journal') }}" class="mb-3">
+            <input type="hidden" name="tab" value="handovers"/>
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <label class="form-label">Статус</label>
+                    <select name="handover_status" class="form-select form-select-sm">
+                        <option value="">Всі</option>
+                        <option value="PENDING" {% if selected_handover_status == 'PENDING' %}selected{% endif %}>Очікує підтвердження</option>
+                        <option value="ACCEPTED" {% if selected_handover_status == 'ACCEPTED' %}selected{% endif %}>Прийнято</option>
+                        <option value="ACCEPTED_WITH_NOTES" {% if selected_handover_status == 'ACCEPTED_WITH_NOTES' %}selected{% endif %}>Прийнято з зауваженнями</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Фільтр</button>
+                </div>
+            </div>
+        </form>
+        <div class="card">
+            <div class="card-body">
+                <h6><i class="bi bi-list"></i> Передачі ({{ handovers|length }})</h6>
+                {% if handovers %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm">
+                        <thead><tr><th>ID</th><th>Зміна</th><th>Здавач</th><th>Приймач</th><th>Статус</th><th>Передано</th><th>Дії</th></tr></thead>
+                        <tbody>
+                            {% for handover in handovers %}
+                            <tr>
+                                <td>#{{ handover.id }}</td>
+                                <td><a href="{{ url_for('shift_detail', shift_id=handover.shift_id) }}">#{{ handover.shift_id }}</a></td>
+                                <td><strong>{{ handover.handover_by_full_name }}</strong><br><small class="text-muted">{{ handover.handover_by_phone or '—' }}</small></td>
+                                <td><strong>{{ handover.handover_to_full_name }}</strong><br><small class="text-muted">{{ handover.handover_to_phone or '—' }}</small></td>
+                                <td>{% if handover.status == 'PENDING' %}<span class="badge bg-warning">Очікує</span>{% elif handover.status == 'ACCEPTED' %}<span class="badge bg-success">Прийнято</span>{% else %}<span class="badge bg-danger">З зауваженнями</span>{% endif %}</td>
+                                <td>{{ handover.handed_over_at|datetime_format }}</td>
+                                <td><a href="{{ url_for('handover_detail', handover_id=handover.id) }}" class="btn btn-sm btn-primary"><i class="bi bi-eye"></i></a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Немає передач</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Звіти -->
+    <div class="tab-pane fade {% if tab == 'reports' %}show active{% endif %}" id="reports" role="tabpanel">
+        {% if current_user.is_senior %}
+        <form method="GET" action="{{ url_for('journal') }}" class="mb-3">
+            <input type="hidden" name="tab" value="reports"/>
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <label class="form-label">Об'єкт</label>
+                    <select name="report_object_id" class="form-select form-select-sm">
+                        <option value="">Всі</option>
+                        {% for obj in objects %}
+                        <option value="{{ obj.id }}" {% if obj.id == selected_report_object_id %}selected{% endif %}>{{ obj.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Фільтр</button>
+                </div>
+            </div>
+        </form>
+        <div class="card">
+            <div class="card-body">
+                <h6><i class="bi bi-list"></i> Звіти ({{ reports|length }})</h6>
+                {% if reports %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm">
+                        <thead><tr><th>ID</th><th>Об'єкт</th><th>Період</th><th>Здавач</th><th>Приймач</th><th>Подій</th><th>Дата</th><th>Дії</th></tr></thead>
+                        <tbody>
+                            {% for report in reports %}
+                            <tr>
+                                <td>#{{ report.id }}</td>
+                                <td>{% for obj in objects %}{% if obj.id == report.object_id %}{{ obj.name }}{% endif %}{% endfor %}</td>
+                                <td>{{ report.shift_start|datetime_format }} — {{ report.shift_end|datetime_format }}</td>
+                                <td><strong>{{ report.handover_by_full_name }}</strong><br><small class="text-muted">{{ report.handover_by_phone or '—' }}</small></td>
+                                <td><strong>{{ report.handover_to_full_name }}</strong><br><small class="text-muted">{{ report.handover_to_phone or '—' }}</small></td>
+                                <td>{{ report.events_count }}</td>
+                                <td>{{ report.created_at|datetime_format }}</td>
+                                <td><a href="{{ url_for('report_detail', report_id=report.id) }}" class="btn btn-sm btn-primary"><i class="bi bi-eye"></i></a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Немає звітів</p>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <p class="text-muted">Перегляд звітів доступний тільки старшим та адміністраторам.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

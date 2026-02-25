@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Передачі змін - Security{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4"><i class="bi bi-arrow-left-right"></i> Передачі змін</h1>
+    </div>
+</div>
+
+<!-- Фільтри -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('handovers') }}">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label">Статус</label>
+                            <select name="status" class="form-select">
+                                <option value="">Всі</option>
+                                <option value="PENDING" {% if selected_status == 'PENDING' %}selected{% endif %}>Очікує підтвердження</option>
+                                <option value="ACCEPTED" {% if selected_status == 'ACCEPTED' %}selected{% endif %}>Прийнято</option>
+                                <option value="ACCEPTED_WITH_NOTES" {% if selected_status == 'ACCEPTED_WITH_NOTES' %}selected{% endif %}>Прийнято з зауваженнями</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-funnel"></i> Фільтрувати
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Список передач -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list"></i> Список передач ({{ handovers|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if handovers %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Зміна</th>
+                                <th>Здавач</th>
+                                <th>Приймач</th>
+                                <th>Статус</th>
+                                <th>Передано</th>
+                                <th>Дії</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for handover in handovers %}
+                            <tr>
+                                <td>#{{ handover.id }}</td>
+                                <td><a href="{{ url_for('shift_detail', shift_id=handover.shift_id) }}">#{{ handover.shift_id }}</a></td>
+                                <td>
+                                    <strong>{{ handover.handover_by_full_name }}</strong><br>
+                                    <small class="text-muted">{{ handover.handover_by_phone or '—' }}</small>
+                                </td>
+                                <td>
+                                    <strong>{{ handover.handover_to_full_name }}</strong><br>
+                                    <small class="text-muted">{{ handover.handover_to_phone or '—' }}</small>
+                                </td>
+                                <td>
+                                    {% if handover.status == 'PENDING' %}
+                                        <span class="badge bg-warning">Очікує</span>
+                                    {% elif handover.status == 'ACCEPTED' %}
+                                        <span class="badge bg-success">Прийнято</span>
+                                    {% elif handover.status == 'ACCEPTED_WITH_NOTES' %}
+                                        <span class="badge bg-danger">З зауваженнями</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ handover.handed_over_at|datetime_format }}</td>
+                                <td>
+                                    <a href="{{ url_for('handover_detail', handover_id=handover.id) }}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-eye"></i> Деталі
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">Немає передач</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
