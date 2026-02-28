@@ -33,7 +33,9 @@ from guard_manager import get_guard_manager
 from object_manager import get_object_manager
 from report_manager import get_report_manager
 from points_manager import get_points_manager
-from datetime import datetime
+from schedule_manager import get_schedule_manager
+import calendar
+from datetime import datetime, date
 
 # Завантажуємо змінні середовища
 load_dotenv("config.env")
@@ -48,6 +50,12 @@ handover_state: Dict[int, Dict[str, Any]] = {}
 
 # Константи для пагінації
 SHIFTS_PER_PAGE = 5  # Кількість змін на сторінку
+
+# Назви місяців українською (нижній регістр) для графіка в боті; індекс 0 не використовується
+MONTH_NAMES_UA = (
+    '', 'січень', 'лютий', 'березень', 'квітень', 'травень', 'червень',
+    'липень', 'серпень', 'вересень', 'жовтень', 'листопад', 'грудень'
+)
 
 
 async def safe_edit_message_text(query, text: str, reply_markup=None, parse_mode='HTML', **kwargs):
@@ -105,9 +113,10 @@ def create_menu_keyboard(user_id: int) -> InlineKeyboardMarkup:
     guard = guard_manager.get_guard(user_id)
     role = (guard or {}).get('role', 'guard')
     
-    # Контролер: тільки «Хто зараз на зміні» та «Головне меню»
+    # Контролер: «Хто зараз на зміні», «Графік роботи» (без блоку «Ваші робочі дні»), «Головне меню»
     if role == 'controller':
         buttons.append([InlineKeyboardButton("👥 Хто зараз на зміні", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "who_on_shift"))])
+        buttons.append([InlineKeyboardButton("📅 Графік роботи", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "view_schedule"))])
         buttons.append([InlineKeyboardButton("🏠 Головне меню", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "main_menu"))])
         return InlineKeyboardMarkup(buttons)
     
@@ -143,6 +152,9 @@ def create_menu_keyboard(user_id: int) -> InlineKeyboardMarkup:
             buttons.append([InlineKeyboardButton("❌ Відмінити передачу", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "cancel_my_handover"))])
 
     buttons.append([InlineKeyboardButton("📋 Мої зміни", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "my_shifts"))])
+    # Графік роботи — тільки для охоронця та старшого, завжди доступний
+    if role in ('guard', 'senior'):
+        buttons.append([InlineKeyboardButton("📅 Графік роботи", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "view_schedule"))])
     # Старший та адмін — кнопка «Хто зараз на зміні»
     if role in ('senior', 'admin'):
         buttons.append([InlineKeyboardButton("👥 Хто зараз на зміні", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "who_on_shift"))])
@@ -737,6 +749,7 @@ async def accept_handover_ok_callback(update: Update, context: ContextTypes.DEFA
     success = handover_manager.accept_handover(handover_id, user_id, with_notes=False)
     
     if success:
+        await notify_handover_completed_to_seniors_and_controllers(context, handover_id)
         shift_manager = get_shift_manager()
         active_shift = shift_manager.get_active_shift(user_id)
         if active_shift:
@@ -804,14 +817,12 @@ async def handle_handover_notes(update: Update, context: ContextTypes.DEFAULT_TY
     success = handover_manager.accept_handover(handover_id, user_id, with_notes=True, notes=notes)
     
     if success:
-        # Створюємо звіт
+        await notify_handover_completed_to_seniors_and_controllers(context, handover_id)
+        # Створюємо звіт та відправляємо детальний звіт адміністраторам
         report_manager = get_report_manager()
         report_id = report_manager.create_report_from_handover(handover_id)
-        
         if report_id:
-            # Відправляємо звіт адміністраторам
             await send_report_to_admins(context, report_id)
-        
         shift_manager = get_shift_manager()
         active_shift = shift_manager.get_active_shift(user_id)
         if active_shift:
@@ -979,7 +990,7 @@ async def cancel_handover_confirm_callback(update: Update, context: ContextTypes
 
 
 async def send_report_to_admins(context: ContextTypes.DEFAULT_TYPE, report_id: int) -> None:
-    """Відправка звіту адміністраторам, старшим та контролерам."""
+    """Відправка детального звіту (з зауваженнями) адміністраторам, старшим та контролерам (у Telegram)."""
     try:
         report_manager = get_report_manager()
         report_text = report_manager.format_report_for_telegram(report_id)
@@ -1001,6 +1012,51 @@ async def send_report_to_admins(context: ContextTypes.DEFAULT_TYPE, report_id: i
                     logger.log_error(f"Помилка відправки звіту користувачу {u.user_id}: {e}")
     except Exception as e:
         logger.log_error(f"Помилка відправки звітів: {e}")
+
+
+async def notify_handover_completed_to_seniors_and_controllers(
+    context: ContextTypes.DEFAULT_TYPE, handover_id: int
+) -> None:
+    """Надіслати старшим та контролерам короткий звіт про завершену передачу зміни (формат: Здавач / Приймач / Передано / Прийнято / Події)."""
+    try:
+        handover_manager = get_handover_manager()
+        handover = handover_manager.get_handover(handover_id)
+        if not handover or handover['status'] not in ('ACCEPTED', 'ACCEPTED_WITH_NOTES'):
+            return
+        guard_manager = get_guard_manager()
+        handover_by = guard_manager.get_guard(handover['handover_by_id'])
+        handover_to = guard_manager.get_guard(handover['handover_to_id'])
+        handover_by_name = handover_by['full_name'] if handover_by else f"ID: {handover['handover_by_id']}"
+        handover_to_name = handover_to['full_name'] if handover_to else f"ID: {handover['handover_to_id']}"
+        handed_str = datetime.fromisoformat(handover['handed_over_at']).strftime('%d.%m.%Y %H:%M')
+        accepted_str = (
+            datetime.fromisoformat(handover['accepted_at']).strftime('%d.%m.%Y %H:%M')
+            if handover.get('accepted_at') else "—"
+        )
+        summary = (handover.get('summary') or "").strip() or "—"
+        notes = (handover.get('notes') or "").strip()
+        text = (
+            "📋 <b>Передача зміни завершена</b>\n\n"
+            f"<b>Здавач:</b> {handover_by_name}\n"
+            f"<b>Приймач:</b> {handover_to_name}\n"
+            f"<b>Передано:</b> {handed_str}\n"
+            f"<b>Прийнято:</b> {accepted_str}\n"
+            f"<b>Події:</b>\n{summary}"
+        )
+        if notes:
+            text += f"\n\n<b>Зауваження:</b>\n{notes}"
+        with get_session() as session:
+            recipients = session.query(User).filter(
+                User.role.in_(['senior', 'controller']),
+                User.is_active == True
+            ).all()
+            for u in recipients:
+                try:
+                    await context.bot.send_message(chat_id=u.user_id, text=text, parse_mode='HTML')
+                except Exception as e:
+                    logger.log_error(f"Помилка відправки звіту передачі користувачу {u.user_id}: {e}")
+    except Exception as e:
+        logger.log_error(f"Помилка сповіщення старших/контролерів про передачу: {e}")
 
 
 async def notify_event_to_seniors_and_controllers(context: ContextTypes.DEFAULT_TYPE, event_id: int) -> None:
@@ -1250,6 +1306,73 @@ async def who_on_shift_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await safe_edit_message_text(query, get_shift_status_line(user_id) + message_text, reply_markup=keyboard)
 
 
+def _short_name(full_name: str) -> str:
+    """Повертає підпис для графіка: прізвище та ім'я (якщо є). Один токен — як є; два і більше — «Прізвище Ім'я»."""
+    parts = (full_name or "").strip().split()
+    if not parts:
+        return "—"
+    if len(parts) >= 2:
+        return f"{parts[-1]} {parts[0]}"
+    return parts[0]
+
+
+async def schedule_month_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показ графіка змін на поточний місяць по об'єкту користувача (охоронець/старший)."""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+
+    guard_manager = get_guard_manager()
+    object_id = guard_manager.get_guard_object_id(user_id)
+    if not object_id:
+        msg = "У вашому профілі не встановлено об'єкт."
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Головне меню", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "main_menu"))]])
+        await safe_edit_message_text(query, get_shift_status_line(user_id) + msg, reply_markup=keyboard)
+        return
+
+    year = date.today().year
+    month = date.today().month
+    schedule_mgr = get_schedule_manager()
+    guards = schedule_mgr.get_guards_for_schedule(object_id=object_id)
+    slots_set = schedule_mgr.get_slots_for_month(year, month, object_id=object_id)
+
+    guard_names: Dict[int, str] = {g["user_id"]: _short_name(g["full_name"]) for g in guards}
+    # Доповнити іменами тих, хто є в слотах, але не в списку охоронців (наприклад інший об'єкт/роль)
+    for (gid, _) in slots_set:
+        if gid not in guard_names:
+            g = guard_manager.get_guard(gid)
+            if g and g.get("full_name"):
+                guard_names[gid] = _short_name(g["full_name"])
+
+    month_name = MONTH_NAMES_UA[month] if 1 <= month <= 12 else ""
+    title = f"📅 <b>Графік роботи на {month_name} {year}</b>"
+
+    my_days = sorted([day for gid, day in slots_set if gid == user_id])
+    lines = [title, ""]
+    if my_days:
+        lines.append(f"Ваші робочі дні: {', '.join(str(d) for d in my_days)}")
+        lines.append("")
+
+    _, days_in_month = calendar.monthrange(year, month)
+    lines.append("По днях:")
+    for day in range(1, days_in_month + 1):
+        guard_ids_this_day = [gid for (gid, d) in slots_set if d == day]
+        if not guard_ids_this_day:
+            lines.append(f"{day}: —")
+        else:
+            names = [("Ви" if gid == user_id else guard_names.get(gid, "?")) for gid in guard_ids_this_day]
+            names_sorted = sorted(names, key=lambda x: (0 if x == "Ви" else 1, x))
+            lines.append(f"{day}: {', '.join(names_sorted)}")
+
+    if not guards and not slots_set:
+        message_text = title + "\n\nГрафік на місяць порожній."
+    else:
+        message_text = "\n".join(lines)
+
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Головне меню", callback_data=csrf_manager.add_csrf_to_callback_data(user_id, "main_menu"))]])
+    await safe_edit_message_text(query, get_shift_status_line(user_id) + message_text, reply_markup=keyboard)
+
+
 async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Повернення до головного меню"""
     query = update.callback_query
@@ -1322,6 +1445,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await my_shifts_callback(update, context)
     elif callback_data == "who_on_shift":
         await who_on_shift_callback(update, context)
+    elif callback_data == "view_schedule":
+        await schedule_month_callback(update, context)
     elif callback_data == "main_menu":
         await main_menu_callback(update, context)
     elif callback_data.startswith("event_type:"):
