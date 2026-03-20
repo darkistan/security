@@ -770,6 +770,8 @@ async def accept_handover_ok_callback(update: Update, context: ContextTypes.DEFA
     
     keyboard = create_menu_keyboard(user_id)
     await safe_edit_message_text(query, get_shift_status_line(user_id) + message_text, reply_markup=keyboard)
+    if success:
+        await notify_handover_parties_after_accept(context, handover_id, user_id)
 
 
 async def accept_handover_notes_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -847,6 +849,8 @@ async def handle_handover_notes(update: Update, context: ContextTypes.DEFAULT_TY
     
     keyboard = create_menu_keyboard(user_id)
     await update.message.reply_text(get_shift_status_line(user_id) + message_text, reply_markup=keyboard, parse_mode='HTML')
+    if success:
+        await notify_handover_parties_after_accept(context, handover_id, user_id)
 
 
 async def cancel_my_handover_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1057,6 +1061,37 @@ async def notify_handover_completed_to_seniors_and_controllers(
                     logger.log_error(f"Помилка відправки звіту передачі користувачу {u.user_id}: {e}")
     except Exception as e:
         logger.log_error(f"Помилка сповіщення старших/контролерів про передачу: {e}")
+
+
+async def notify_handover_parties_after_accept(
+    context: ContextTypes.DEFAULT_TYPE, handover_id: int, receiver_user_id: int
+) -> None:
+    """Окремі повідомлення приймачу (підтвердження) та здавачу (зміна прийнята)."""
+    try:
+        handover_manager = get_handover_manager()
+        handover = handover_manager.get_handover(handover_id)
+        if not handover:
+            return
+        sender_id = handover['handover_by_id']
+        receiver_msg = (
+            "✅ <b>Ви все зробили правильно.</b>\n\n"
+            "Зміну прийнято успішно, передача завершена."
+        )
+        try:
+            await context.bot.send_message(chat_id=receiver_user_id, text=receiver_msg, parse_mode='HTML')
+        except Exception as e:
+            logger.log_error(f"Сповіщення приймачу передачі: {e}")
+        sender_msg = (
+            "✅ <b>Вашу зміну прийнято</b>\n\n"
+            "Приймач підтвердив передачу зміни."
+        )
+        if sender_id != receiver_user_id:
+            try:
+                await context.bot.send_message(chat_id=sender_id, text=sender_msg, parse_mode='HTML')
+            except Exception as e:
+                logger.log_error(f"Сповіщення здавачу передачі: {e}")
+    except Exception as e:
+        logger.log_error(f"notify_handover_parties_after_accept: {e}")
 
 
 async def notify_event_to_seniors_and_controllers(context: ContextTypes.DEFAULT_TYPE, event_id: int) -> None:

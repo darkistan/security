@@ -28,6 +28,7 @@ from object_manager import get_object_manager
 from report_manager import get_report_manager
 from points_manager import get_points_manager
 from announcement_manager import get_announcement_manager
+from telegram_notify import notify_guard_points_awarded
 from schedule_manager import get_schedule_manager
 from vacation_manager import get_vacation_manager
 from auth import auth_manager
@@ -1016,6 +1017,7 @@ def points_add():
     points_mgr = get_points_manager()
     if points_mgr.add_points(guard_id, points_delta, reason, created_by_id=current_user.user_id):
         flash(f'Бали успішно нараховано: {points_delta:+d}.', 'success')
+        notify_guard_points_awarded(guard_id, points_delta, reason)
     else:
         flash('Не вдалося нарахувати бали. Перевірте охоронця.', 'danger')
     return redirect(url_for('points'))
